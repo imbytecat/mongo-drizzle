@@ -67,9 +67,21 @@ const castValue = (value: unknown, schema: z.ZodTypeAny): unknown => {
 
 // --- 运算符映射 ---
 
+// 辅助函数：检查并处理数组值
+const handleArrayFilter = (
+	col: Column,
+	val: unknown,
+	fn: (col: Column, val: unknown[]) => SQL,
+): SQL | undefined => {
+	if (!Array.isArray(val) || val.length === 0) {
+		return undefined;
+	}
+	return fn(col, val);
+};
+
 const comparisonFilterMap: Record<
 	ComparisonOperator,
-	(col: Column, val: any) => SQL | undefined
+	(col: Column, val: unknown) => SQL | undefined
 > = {
 	eq,
 	gt,
@@ -77,10 +89,8 @@ const comparisonFilterMap: Record<
 	lt,
 	lte,
 	ne,
-	in: (col, val) =>
-		Array.isArray(val) && val.length > 0 ? inArray(col, val) : undefined,
-	nin: (col, val) =>
-		Array.isArray(val) && val.length > 0 ? notInArray(col, val) : undefined,
+	in: (col, val) => handleArrayFilter(col, val, inArray),
+	nin: (col, val) => handleArrayFilter(col, val, notInArray),
 };
 
 const logicalFilterMap: Record<
