@@ -22,7 +22,7 @@ import type { MySqlSelect } from "drizzle-orm/mysql-core";
 import type { PgSelect } from "drizzle-orm/pg-core";
 import type { SQLiteSelect } from "drizzle-orm/sqlite-core";
 import { createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
+import type { z } from "zod";
 import type { QueryRequest } from "./schema";
 
 const parser = new MongoQueryParser(allParsingInstructions);
@@ -46,6 +46,11 @@ interface QueryContext {
 	schemaShape: Record<string, z.ZodTypeAny>;
 }
 
+// --- Schema 缓存 ---
+
+// 使用 WeakMap 缓存 schema，避免重复创建，提升性能
+const schemaCache = new WeakMap<Table, Record<string, z.ZodTypeAny>>();
+
 // --- 辅助函数 ---
 
 // 帮助函数：过滤掉 undefined 的 SQL 片段
@@ -53,16 +58,9 @@ const compactSQL = (args: (SQL | undefined)[]): SQL[] =>
 	args.filter((x): x is SQL => x !== undefined);
 
 // 帮助函数：值转换与解析
-const castValue = (value: unknown, schema: z.ZodTypeAny): any => {
-	// 针对 Date 的特殊处理：JSON 只有字符串，需要转 Date 对象
-	if (typeof value === "string" && schema instanceof z.ZodDate) {
-		const date = new Date(value);
-		if (!Number.isNaN(date.getTime())) {
-			return date; // 转换成功直接返回，不需要再过一遍 safeParse，提升一点性能
-		}
-	}
-
-	// 使用原始 schema 进行校验 (保持这一步是为了利用 Zod 的 coercion 能力，如果有的话)
+// Zod v4 的 safeParse 性能大幅提升（14x 字符串，7x 数组，6.5x 对象）
+// 直接使用 Zod 的解析和 coercion 能力即可
+const castValue = (value: unknown, schema: z.ZodTypeAny): unknown => {
 	const result = schema.safeParse(value);
 	return result.success ? result.data : undefined;
 };
@@ -184,11 +182,17 @@ export const applyMongoQuery = <
 	table: TTable,
 	request: QueryRequest,
 ): TQueryBuilder => {
+	// 从缓存获取或创建 schema
+	let schemaShape = schemaCache.get(table);
+	if (!schemaShape) {
+		schemaShape = createSelectSchema(table).shape;
+		schemaCache.set(table, schemaShape);
+	}
+
 	// 构建上下文
-	// 提示：如果在高并发场景下，可以考虑将 schemaShape 缓存到 WeakMap 中，避免每次请求都 createSelectSchema
 	const context: QueryContext = {
 		columns: getColumns(table),
-		schemaShape: createSelectSchema(table).shape,
+		schemaShape,
 	};
 
 	const ast = parser.parse(request.find);
