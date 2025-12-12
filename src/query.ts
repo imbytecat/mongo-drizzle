@@ -18,11 +18,17 @@ import {
 	notInArray,
 	or,
 } from "drizzle-orm";
+import type { MySqlSelect } from "drizzle-orm/mysql-core";
+import type { PgSelect } from "drizzle-orm/pg-core";
+import type { SQLiteSelect } from "drizzle-orm/sqlite-core";
 import { createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 import type { QueryRequest } from "./schema";
 
 const parser = new MongoQueryParser(allParsingInstructions);
+
+// 支持多种数据库方言的 Select 类型
+type AnySelect = PgSelect | MySqlSelect | SQLiteSelect;
 
 type ComparisonOperator =
 	| "eq"
@@ -171,12 +177,7 @@ const buildSortSQL = (sort: QueryRequest["sort"], context: QueryContext) => {
 
 export const applyMongoQuery = <
 	TTable extends Table,
-	TQueryBuilder extends {
-		where: (sql: SQL | undefined) => TQueryBuilder;
-		orderBy: (...columns: SQL[]) => TQueryBuilder;
-		limit: (limit: number) => TQueryBuilder;
-		offset: (offset: number) => TQueryBuilder;
-	},
+	TQueryBuilder extends AnySelect,
 >(
 	qb: TQueryBuilder,
 	table: TTable,
@@ -198,5 +199,5 @@ export const applyMongoQuery = <
 		.where(whereSQL)
 		.orderBy(...orderBySQL)
 		.limit(request.limit)
-		.offset(request.skip);
+		.offset(request.skip) as TQueryBuilder;
 };
