@@ -7,7 +7,7 @@ import {
 	asc,
 	desc,
 	eq,
-	getTableColumns,
+	getColumns,
 	gt,
 	gte,
 	inArray,
@@ -19,24 +19,10 @@ import {
 	or,
 } from "drizzle-orm";
 import { createSelectSchema } from "drizzle-zod";
-import * as z from "zod";
+import { z } from "zod";
+import type { QueryRequest } from "./schema";
 
-// --- 1. 初始化解析器 ---
 const parser = new MongoQueryParser(allParsingInstructions);
-
-// --- 2. 类型定义 ---
-export const queryRequestSchema = z
-	.object({
-		find: z.record(z.string(), z.any()).default({}),
-		sort: z
-			.record(z.string(), z.union([z.literal(1), z.literal(-1)]))
-			.optional(),
-		skip: z.number().int().nonnegative().default(0),
-		limit: z.number().int().positive().default(50),
-	})
-	.strict();
-
-export type QueryRequest = z.infer<typeof queryRequestSchema>;
 
 type SupportedMongoComparisonOperator =
 	| "eq"
@@ -54,30 +40,16 @@ interface QueryContext {
 	schemaShape: Record<string, z.ZodTypeAny>;
 }
 
-// --- 3. 辅助函数 (Utils) ---
+// --- 辅助函数 ---
 
 // 帮助函数：过滤掉 undefined 的 SQL 片段
 const compactSQL = (args: (SQL | undefined)[]): SQL[] =>
 	args.filter((x): x is SQL => x !== undefined);
 
-// 帮助函数：拆包 Zod Schema (处理 nullable/optional) 以获取原始类型
-const getInnerSchema = (schema: z.ZodTypeAny): z.ZodTypeAny => {
-	if (schema instanceof z.ZodNullable || schema instanceof z.ZodOptional) {
-		return getInnerSchema(schema.unwrap());
-	}
-	if (schema instanceof z.ZodEffects) {
-		// 处理 refine/transform
-		return getInnerSchema(schema._def.schema);
-	}
-	return schema;
-};
-
 // 帮助函数：值转换与解析
 const castValue = (value: unknown, schema: z.ZodTypeAny): any => {
-	const inner = getInnerSchema(schema);
-
 	// 针对 Date 的特殊处理：JSON 只有字符串，需要转 Date 对象
-	if (typeof value === "string" && inner instanceof z.ZodDate) {
+	if (typeof value === "string" && schema instanceof z.ZodDate) {
 		const date = new Date(value);
 		if (!Number.isNaN(date.getTime())) {
 			return date; // 转换成功直接返回，不需要再过一遍 safeParse，提升一点性能
@@ -89,7 +61,7 @@ const castValue = (value: unknown, schema: z.ZodTypeAny): any => {
 	return result.success ? result.data : undefined;
 };
 
-// --- 4. 运算符映射 ---
+// --- 运算符映射 ---
 
 const comparisonFilterMap: Record<
 	SupportedMongoComparisonOperator,
@@ -116,11 +88,13 @@ const logicalFilterMap: Record<
 	not: (arg) => (arg ? not(arg) : undefined),
 	nor: (...args) => {
 		const valid = compactSQL(args);
-		return valid.length > 0 ? not(or(...valid)!) : undefined;
+		const orClause = or(...valid);
+
+		return orClause ? not(orClause) : undefined;
 	},
 };
 
-// --- 5. 核心逻辑 ---
+// --- 核心逻辑 ---
 
 const processNode = (
 	astNode: Condition,
@@ -180,7 +154,7 @@ const processNode = (
 	return undefined;
 };
 
-// --- 6. 排序构建 ---
+// --- 排序构建 ---
 
 const buildSortSQL = (sort: QueryRequest["sort"], context: QueryContext) => {
 	if (!sort) {
@@ -198,7 +172,7 @@ const buildSortSQL = (sort: QueryRequest["sort"], context: QueryContext) => {
 	);
 };
 
-// --- 7. 对外入口 ---
+// --- 对外入口 ---
 
 export const applyMongoQuery = <
 	TTable extends Table,
@@ -216,7 +190,7 @@ export const applyMongoQuery = <
 	// 构建上下文
 	// 提示：如果在高并发场景下，可以考虑将 schemaShape 缓存到 WeakMap 中，避免每次请求都 createSelectSchema
 	const context: QueryContext = {
-		columns: getTableColumns(table),
+		columns: getColumns(table),
 		schemaShape: createSelectSchema(table).shape,
 	};
 
