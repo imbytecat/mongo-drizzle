@@ -25,9 +25,17 @@ import { createSelectSchema } from "drizzle-zod";
 import type { z } from "zod";
 import type { QueryRequest } from "./schema";
 
-const parser = new MongoQueryParser(allParsingInstructions);
+// --- 常量定义 ---
 
-// 支持多种数据库方言的 Select 类型
+const MONGO_QUERY_PARSER = new MongoQueryParser(allParsingInstructions);
+
+const SORT_DIRECTION = {
+	ASC: 1,
+	DESC: -1,
+} as const;
+
+// --- 类型定义 ---
+
 type AnySelect = PgSelect | MySqlSelect | SQLiteSelect;
 
 type ComparisonOperator =
@@ -39,49 +47,90 @@ type ComparisonOperator =
 	| "lte"
 	| "ne"
 	| "nin";
+
 type LogicalOperator = "and" | "or" | "not" | "nor";
 
 interface QueryContext {
-	columns: Record<string, Column>;
-	schemaShape: Record<string, z.ZodTypeAny>;
+	readonly columns: Readonly<Record<string, Column>>;
+	readonly schemaShape: Readonly<Record<string, z.ZodTypeAny>>;
 }
 
-// --- Schema 缓存 ---
+interface TableMetadata {
+	readonly columns: Record<string, Column>;
+	readonly schemaShape: Record<string, z.ZodTypeAny>;
+}
 
-// 使用 WeakMap 缓存 schema，避免重复创建，提升性能
-const schemaCache = new WeakMap<Table, Record<string, z.ZodTypeAny>>();
+// --- 缓存层 ---
+
+/**
+ * 使用 WeakMap 缓存表的元数据（columns + schema）
+ * WeakMap 的优势：当 table 对象被垃圾回收时，缓存会自动清理
+ */
+const tableMetadataCache = new WeakMap<Table, TableMetadata>();
+
+/**
+ * 获取或创建表的元数据（columns 和 schema）
+ */
+const getOrCreateTableMetadata = (table: Table): TableMetadata => {
+	let metadata = tableMetadataCache.get(table);
+
+	if (!metadata) {
+		metadata = {
+			columns: getColumns(table),
+			schemaShape: createSelectSchema(table).shape,
+		};
+		tableMetadataCache.set(table, metadata);
+	}
+
+	return metadata;
+};
 
 // --- 辅助函数 ---
 
-// 帮助函数：过滤掉 undefined 的 SQL 片段
-const compactSQL = (args: (SQL | undefined)[]): SQL[] =>
-	args.filter((x): x is SQL => x !== undefined);
+/**
+ * 过滤掉 undefined 的 SQL 片段
+ * 用于清理可能包含 undefined 的 SQL 数组
+ */
+const filterDefinedSQL = (sqlArray: readonly (SQL | undefined)[]): SQL[] =>
+	sqlArray.filter((x): x is SQL => x !== undefined);
 
-// 帮助函数：值转换与解析
-// Zod v4 的 safeParse 性能大幅提升（14x 字符串，7x 数组，6.5x 对象）
-// 直接使用 Zod 的解析和 coercion 能力即可
-const castValue = (value: unknown, schema: z.ZodTypeAny): unknown => {
+/**
+ * 使用 Zod schema 解析和验证值
+ *
+ * @returns 验证成功返回转换后的值，失败返回 undefined
+ */
+const parseAndValidateValue = (
+	value: unknown,
+	schema: z.ZodTypeAny,
+): unknown => {
 	const result = schema.safeParse(value);
 	return result.success ? result.data : undefined;
 };
 
-// --- 运算符映射 ---
-
-// 辅助函数：检查并处理数组值
-const handleArrayFilter = (
-	col: Column,
-	val: unknown,
-	fn: (col: Column, val: unknown[]) => SQL,
+/**
+ * 处理数组类型的过滤操作（in/nin）
+ * 统一处理空数组和非数组情况
+ */
+const createArrayFilterSQL = (
+	column: Column,
+	values: unknown,
+	sqlFunction: (col: Column, val: unknown[]) => SQL,
 ): SQL | undefined => {
-	if (!Array.isArray(val) || val.length === 0) {
+	if (!Array.isArray(values) || values.length === 0) {
 		return undefined;
 	}
-	return fn(col, val);
+	return sqlFunction(column, values);
 };
 
-const comparisonFilterMap: Record<
+// --- 运算符映射 ---
+
+/**
+ * 比较运算符到 Drizzle SQL 函数的映射
+ * 所有运算符都返回 SQL | undefined 以支持链式处理
+ */
+const COMPARISON_OPERATORS: Record<
 	ComparisonOperator,
-	(col: Column, val: unknown) => SQL | undefined
+	(column: Column, value: unknown) => SQL | undefined
 > = {
 	eq,
 	gt,
@@ -89,130 +138,194 @@ const comparisonFilterMap: Record<
 	lt,
 	lte,
 	ne,
-	in: (col, val) => handleArrayFilter(col, val, inArray),
-	nin: (col, val) => handleArrayFilter(col, val, notInArray),
+	in: (col, val) => createArrayFilterSQL(col, val, inArray),
+	nin: (col, val) => createArrayFilterSQL(col, val, notInArray),
 };
 
-const logicalFilterMap: Record<
+/**
+ * 逻辑运算符到 Drizzle SQL 函数的映射
+ * 处理 AND、OR、NOT、NOR 等复合条件
+ */
+const LOGICAL_OPERATORS: Record<
 	LogicalOperator,
-	(...args: (SQL | undefined)[]) => SQL | undefined
+	(...args: readonly (SQL | undefined)[]) => SQL | undefined
 > = {
-	and: (...args) => and(...compactSQL(args)),
-	or: (...args) => or(...compactSQL(args)),
+	and: (...args) => and(...filterDefinedSQL(args)),
+	or: (...args) => or(...filterDefinedSQL(args)),
 	not: (arg) => (arg ? not(arg) : undefined),
 	nor: (...args) => {
-		const valid = compactSQL(args);
-		const orClause = or(...valid);
-
+		const validConditions = filterDefinedSQL(args);
+		const orClause = or(...validConditions);
 		return orClause ? not(orClause) : undefined;
 	},
 };
 
-// --- 核心逻辑 ---
+// --- 核心转换逻辑 ---
 
-const processNode = (
-	astNode: Condition,
+/**
+ * 处理字段条件（比较操作）
+ * 负责值验证、类型转换和 SQL 生成
+ */
+const processFieldCondition = (
+	condition: FieldCondition,
 	context: QueryContext,
 ): SQL | undefined => {
-	// 逻辑条件处理 (AND/OR)
-	if (astNode instanceof CompoundCondition) {
-		const op = astNode.operator as LogicalOperator;
-		if (logicalFilterMap[op]) {
-			const conditions = astNode.value.map((cond) =>
-				processNode(cond, context),
-			);
-			return logicalFilterMap[op](...conditions);
-		}
-		return undefined;
-	}
+	const { field, value: rawValue, operator } = condition;
+	const op = operator as ComparisonOperator;
 
-	// 字段条件处理 (Field)
-	if (!(astNode instanceof FieldCondition)) {
-		return undefined;
-	}
-
-	const { field, value: rawValue } = astNode;
-	const op = astNode.operator as ComparisonOperator;
 	const column = context.columns[field];
 	const fieldSchema = context.schemaShape[field];
 
-	// 字段不存在或 Schema 不存在
+	// 提前返回：字段或 schema 不存在
 	if (!column || !fieldSchema) {
 		return undefined;
 	}
 
-	// 数组操作符处理 (in/nin)
+	const filterFunction = COMPARISON_OPERATORS[op];
+	if (!filterFunction) {
+		return undefined;
+	}
+
+	// 数组操作符特殊处理：批量验证
 	if (op === "in" || op === "nin") {
 		if (!Array.isArray(rawValue)) {
 			return undefined;
 		}
+
 		const validValues = rawValue
-			.map((v) => castValue(v, fieldSchema))
+			.map((v) => parseAndValidateValue(v, fieldSchema))
 			.filter((v) => v !== undefined);
 
-		const filterFn = comparisonFilterMap[op];
-		return filterFn ? filterFn(column, validValues) : undefined;
+		return validValues.length > 0
+			? filterFunction(column, validValues)
+			: undefined;
 	}
 
-	// 单值操作符处理
-	const finalValue = castValue(rawValue, fieldSchema);
-	if (finalValue === undefined) {
+	// 单值操作符：直接验证
+	const validatedValue = parseAndValidateValue(rawValue, fieldSchema);
+	return validatedValue !== undefined
+		? filterFunction(column, validatedValue)
+		: undefined;
+};
+
+/**
+ * 处理复合条件（逻辑操作）
+ * 递归处理嵌套的 AND/OR/NOT/NOR 条件
+ */
+const processCompoundCondition = (
+	condition: CompoundCondition,
+	context: QueryContext,
+): SQL | undefined => {
+	const op = condition.operator as LogicalOperator;
+	const logicalFunction = LOGICAL_OPERATORS[op];
+
+	if (!logicalFunction) {
 		return undefined;
 	}
 
-	const filterFn = comparisonFilterMap[op];
-	return filterFn ? filterFn(column, finalValue) : undefined;
+	const childConditions = condition.value.map((cond) =>
+		convertConditionToSQL(cond, context),
+	);
+
+	return logicalFunction(...childConditions);
 };
 
-// --- 排序构建 ---
+/**
+ * 将 AST 条件节点转换为 Drizzle SQL
+ * 这是查询转换的核心入口函数
+ */
+const convertConditionToSQL = (
+	astNode: Condition,
+	context: QueryContext,
+): SQL | undefined => {
+	if (astNode instanceof CompoundCondition) {
+		return processCompoundCondition(astNode, context);
+	}
 
-const buildSortSQL = (sort: QueryRequest["sort"], context: QueryContext) => {
+	if (astNode instanceof FieldCondition) {
+		return processFieldCondition(astNode, context);
+	}
+
+	return undefined;
+};
+
+/**
+ * 构建排序子句
+ * 将 MongoDB 风格的排序对象转换为 Drizzle ORDER BY
+ */
+const buildOrderByClause = (
+	sort: QueryRequest["sort"],
+	context: QueryContext,
+): SQL[] => {
 	if (!sort) {
 		return [];
 	}
-	return compactSQL(
+
+	return filterDefinedSQL(
 		Object.entries(sort).map(([field, direction]) => {
 			const column = context.columns[field];
-			return column
-				? direction === 1
-					? asc(column)
-					: desc(column)
-				: undefined;
+			if (!column) {
+				return undefined;
+			}
+
+			return direction === SORT_DIRECTION.ASC ? asc(column) : desc(column);
 		}),
 	);
 };
 
-// --- 对外入口 ---
+// --- 公共 API ---
 
+/**
+ * 将 MongoDB 风格的查询应用到 Drizzle 查询构建器
+ *
+ * 功能：
+ * - 解析 MongoDB 查询语法（find, sort, limit, skip）
+ * - 转换为 Drizzle ORM 的 SQL 构建器调用
+ * - 支持 PostgreSQL、MySQL、SQLite
+ * - 使用 Zod 进行值验证和类型转换
+ * - 缓存 table metadata 以提升性能
+ *
+ * @example
+ * ```typescript
+ * const result = await applyMongoQuery(
+ *   db.select().from(users),
+ *   users,
+ *   {
+ *     find: { age: { $gt: 18 }, name: { $in: ['Alice', 'Bob'] } },
+ *     sort: { createdAt: -1 },
+ *     limit: 10,
+ *     skip: 0,
+ *   }
+ * );
+ * ```
+ */
 export const applyMongoQuery = <
 	TTable extends Table,
 	TQueryBuilder extends AnySelect,
 >(
-	qb: TQueryBuilder,
+	queryBuilder: TQueryBuilder,
 	table: TTable,
 	request: QueryRequest,
 ): TQueryBuilder => {
-	// 从缓存获取或创建 schema
-	let schemaShape = schemaCache.get(table);
-	if (!schemaShape) {
-		schemaShape = createSelectSchema(table).shape;
-		schemaCache.set(table, schemaShape);
-	}
+	// 获取缓存的表元数据
+	const metadata = getOrCreateTableMetadata(table);
 
-	// 构建上下文
 	const context: QueryContext = {
-		columns: getColumns(table),
-		schemaShape,
+		columns: metadata.columns,
+		schemaShape: metadata.schemaShape,
 	};
 
-	const ast = parser.parse(request.find);
+	// 解析 MongoDB 查询
+	const ast = MONGO_QUERY_PARSER.parse(request.find);
 
-	const whereSQL = processNode(ast, context);
-	const orderBySQL = buildSortSQL(request.sort, context);
+	// 构建 SQL 子句
+	const whereClause = convertConditionToSQL(ast, context);
+	const orderByClause = buildOrderByClause(request.sort, context);
 
-	return qb
-		.where(whereSQL)
-		.orderBy(...orderBySQL)
+	// 应用到查询构建器
+	return queryBuilder
+		.where(whereClause)
+		.orderBy(...orderByClause)
 		.limit(request.limit)
 		.offset(request.skip) as TQueryBuilder;
 };
