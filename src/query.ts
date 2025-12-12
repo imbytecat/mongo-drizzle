@@ -119,40 +119,41 @@ const processNode = (
 	}
 
 	// 字段条件处理 (Field)
-	if (astNode instanceof FieldCondition) {
-		const { field, value: rawValue } = astNode;
-		const op = astNode.operator as ComparisonOperator;
-		const column = context.columns[field];
-		const fieldSchema = context.schemaShape[field];
-
-		// 快速失败：字段不存在或 Schema 不存在
-		if (!column || !fieldSchema) {
-			return undefined;
-		}
-
-		let finalValue: any;
-
-		// 分离 单值处理 vs 数组处理
-		if (op === "in" || op === "nin") {
-			if (!Array.isArray(rawValue)) {
-				return undefined;
-			}
-			// 批量转换，过滤无效值
-			finalValue = rawValue
-				.map((v) => castValue(v, fieldSchema))
-				.filter((v) => v !== undefined);
-		} else {
-			finalValue = castValue(rawValue, fieldSchema);
-			if (finalValue === undefined) {
-				return undefined;
-			}
-		}
-
-		const filterFn = comparisonFilterMap[op];
-		return filterFn ? filterFn(column, finalValue) : undefined;
+	if (!(astNode instanceof FieldCondition)) {
+		return undefined;
 	}
 
-	return undefined;
+	const { field, value: rawValue } = astNode;
+	const op = astNode.operator as ComparisonOperator;
+	const column = context.columns[field];
+	const fieldSchema = context.schemaShape[field];
+
+	// 字段不存在或 Schema 不存在
+	if (!column || !fieldSchema) {
+		return undefined;
+	}
+
+	// 数组操作符处理 (in/nin)
+	if (op === "in" || op === "nin") {
+		if (!Array.isArray(rawValue)) {
+			return undefined;
+		}
+		const validValues = rawValue
+			.map((v) => castValue(v, fieldSchema))
+			.filter((v) => v !== undefined);
+
+		const filterFn = comparisonFilterMap[op];
+		return filterFn ? filterFn(column, validValues) : undefined;
+	}
+
+	// 单值操作符处理
+	const finalValue = castValue(rawValue, fieldSchema);
+	if (finalValue === undefined) {
+		return undefined;
+	}
+
+	const filterFn = comparisonFilterMap[op];
+	return filterFn ? filterFn(column, finalValue) : undefined;
 };
 
 // --- 排序构建 ---
