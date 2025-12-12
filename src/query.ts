@@ -24,7 +24,7 @@ import type { QueryRequest } from "./schema";
 
 const parser = new MongoQueryParser(allParsingInstructions);
 
-type SupportedMongoComparisonOperator =
+type ComparisonOperator =
 	| "eq"
 	| "gt"
 	| "gte"
@@ -33,7 +33,7 @@ type SupportedMongoComparisonOperator =
 	| "lte"
 	| "ne"
 	| "nin";
-type SupportedMongoLogicalOperator = "and" | "or" | "not" | "nor";
+type LogicalOperator = "and" | "or" | "not" | "nor";
 
 interface QueryContext {
 	columns: Record<string, Column>;
@@ -64,7 +64,7 @@ const castValue = (value: unknown, schema: z.ZodTypeAny): any => {
 // --- 运算符映射 ---
 
 const comparisonFilterMap: Record<
-	SupportedMongoComparisonOperator,
+	ComparisonOperator,
 	(col: Column, val: any) => SQL | undefined
 > = {
 	eq,
@@ -80,7 +80,7 @@ const comparisonFilterMap: Record<
 };
 
 const logicalFilterMap: Record<
-	SupportedMongoLogicalOperator,
+	LogicalOperator,
 	(...args: (SQL | undefined)[]) => SQL | undefined
 > = {
 	and: (...args) => and(...compactSQL(args)),
@@ -102,7 +102,7 @@ const processNode = (
 ): SQL | undefined => {
 	// 逻辑条件处理 (AND/OR)
 	if (astNode instanceof CompoundCondition) {
-		const op = astNode.operator as SupportedMongoLogicalOperator;
+		const op = astNode.operator as LogicalOperator;
 		if (logicalFilterMap[op]) {
 			const conditions = astNode.value.map((cond) =>
 				processNode(cond, context),
@@ -114,12 +114,8 @@ const processNode = (
 
 	// 字段条件处理 (Field)
 	if (astNode instanceof FieldCondition) {
-		const field = astNode.field;
-		if (typeof field !== "string") {
-			return undefined;
-		}
-
-		const op = astNode.operator as SupportedMongoComparisonOperator;
+		const { field, value: rawValue } = astNode;
+		const op = astNode.operator as ComparisonOperator;
 		const column = context.columns[field];
 		const fieldSchema = context.schemaShape[field];
 
@@ -128,7 +124,6 @@ const processNode = (
 			return undefined;
 		}
 
-		const rawValue = astNode.value;
 		let finalValue: any;
 
 		// 分离 单值处理 vs 数组处理
