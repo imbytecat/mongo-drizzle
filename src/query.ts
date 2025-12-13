@@ -7,7 +7,7 @@ import {
 	asc,
 	desc,
 	eq,
-	getColumns,
+	getTableColumns,
 	gt,
 	gte,
 	inArray,
@@ -18,9 +18,7 @@ import {
 	notInArray,
 	or,
 } from "drizzle-orm";
-import type { MySqlSelect } from "drizzle-orm/mysql-core";
 import type { PgSelect } from "drizzle-orm/pg-core";
-import type { SQLiteSelect } from "drizzle-orm/sqlite-core";
 import { createSelectSchema } from "drizzle-zod";
 import type { z } from "zod";
 import type { QueryRequest } from "./schema";
@@ -35,8 +33,6 @@ const SORT_DIRECTION = {
 } as const;
 
 // --- 类型定义 ---
-
-type AnySelect = PgSelect | MySqlSelect | SQLiteSelect;
 
 type ComparisonOperator =
 	| "eq"
@@ -76,7 +72,7 @@ const getOrCreateTableMetadata = (table: Table): TableMetadata => {
 
 	if (!metadata) {
 		metadata = {
-			columns: getColumns(table),
+			columns: getTableColumns(table),
 			schemaShape: createSelectSchema(table).shape,
 		};
 		tableMetadataCache.set(table, metadata);
@@ -301,7 +297,7 @@ const buildOrderByClause = (
  */
 export const applyMongoQuery = <
 	TTable extends Table,
-	TQueryBuilder extends AnySelect,
+	TQueryBuilder extends PgSelect,
 >(
 	queryBuilder: TQueryBuilder,
 	table: TTable,
