@@ -272,90 +272,39 @@ const buildOrderByClause = (
 // --- 公共 API ---
 
 /**
- * 将 MongoDB 风格的查询应用到 Drizzle 查询构建器
- *
- * 功能：
- * - 解析 MongoDB 查询语法（find, sort, limit, skip）
- * - 转换为 Drizzle ORM 的 SQL 构建器调用
- * - 支持 PostgreSQL、MySQL、SQLite
- * - 使用 Zod 进行值验证和类型转换
- * - 缓存 table metadata 以提升性能
- *
- * @example
- * ```typescript
- * const result = await applyMongoQuery(
- *   db.select().from(users),
- *   users,
- *   {
- *     find: { age: { $gt: 18 }, name: { $in: ['Alice', 'Bob'] } },
- *     sort: { createdAt: -1 },
- *     limit: 10,
- *     skip: 0,
- *   }
- * );
- * ```
- */
-export const applyMongoQuery = <
-	TTable extends Table,
-	TQueryBuilder extends PgSelect,
->(
-	queryBuilder: TQueryBuilder,
-	table: TTable,
-	request: QueryRequest,
-): TQueryBuilder => {
-	// 获取缓存的表元数据
-	const metadata = getOrCreateTableMetadata(table);
-
-	const context: QueryContext = {
-		columns: metadata.columns,
-		schemaShape: metadata.schemaShape,
-	};
-
-	// 解析 MongoDB 查询
-	const ast = MONGO_QUERY_PARSER.parse(request.find);
-
-	// 构建 SQL 子句
-	const whereClause = convertConditionToSQL(ast, context);
-	const orderByClause = buildOrderByClause(request.sort, context);
-
-	// 应用到查询构建器
-	return queryBuilder
-		.where(whereClause)
-		.orderBy(...orderByClause)
-		.limit(request.limit)
-		.offset(request.skip) as TQueryBuilder;
-};
-
-/**
  * 创建一个可组合的查询修饰器函数
  *
  * 允许你创建可重用的查询片段，类似 Drizzle 文档中的 withFriends 模式
+ * 必须在 $dynamic() 模式下使用
  *
  * @example
  * ```typescript
  * // 定义可重用的查询修饰器
- * const withAgeFilter = createQueryModifier(users, {
- *   find: { age: { $gt: 18 } }
+ * const withAdults = withMongoQuery(users, {
+ *   find: { age: { $gte: 18 } }
  * });
  *
- * const withNameSort = createQueryModifier(users, {
+ * const withActiveUsers = withMongoQuery(users, {
+ *   find: { status: { $eq: 'active' } }
+ * });
+ *
+ * const withNameSort = withMongoQuery(users, {
  *   sort: { name: 1 }
  * });
  *
- * // 组合使用
+ * // 组合使用（必须使用 $dynamic()）
  * let query = db.select().from(users).$dynamic();
- * query = withAgeFilter(query);
+ * query = withAdults(query);
+ * query = withActiveUsers(query);
  * query = withNameSort(query);
  * const result = await query;
  * ```
  */
-export const createQueryModifier = <TTable extends Table>(
+export const withMongoQuery = <TTable extends Table>(
 	table: TTable,
 	request: Partial<QueryRequest>,
 ) => {
-	return <TQueryBuilder extends PgSelect>(
-		queryBuilder: TQueryBuilder,
-	): TQueryBuilder => {
+	return <T extends PgSelect>(queryBuilder: T): T => {
 		// 获取缓存的表元数据
 		const metadata = getOrCreateTableMetadata(table);
 
@@ -371,7 +320,7 @@ export const createQueryModifier = <TTable extends Table>(
 			const ast = MONGO_QUERY_PARSER.parse(request.find);
 			const whereClause = convertConditionToSQL(ast, context);
 			if (whereClause) {
-				result = result.where(whereClause) as TQueryBuilder;
+				result = result.where(whereClause);
 			}
 		}
 
@@ -379,17 +328,17 @@ export const createQueryModifier = <TTable extends Table>(
 		if (request.sort) {
 			const orderByClause = buildOrderByClause(request.sort, context);
 			if (orderByClause.length > 0) {
-				result = result.orderBy(...orderByClause) as TQueryBuilder;
+				result = result.orderBy(...orderByClause);
 			}
 		}
 
 		// 应用分页
 		if (request.limit !== undefined) {
-			result = result.limit(request.limit) as TQueryBuilder;
+			result = result.limit(request.limit);
 		}
 
 		if (request.skip !== undefined) {
-			result = result.offset(request.skip) as TQueryBuilder;
+			result = result.offset(request.skip);
 		}
 
 		return result;
