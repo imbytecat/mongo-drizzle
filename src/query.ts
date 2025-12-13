@@ -325,3 +325,73 @@ export const applyMongoQuery = <
 		.limit(request.limit)
 		.offset(request.skip) as TQueryBuilder;
 };
+
+/**
+ * 创建一个可组合的查询修饰器函数
+ *
+ * 允许你创建可重用的查询片段，类似 Drizzle 文档中的 withFriends 模式
+ *
+ * @example
+ * ```typescript
+ * // 定义可重用的查询修饰器
+ * const withAgeFilter = createQueryModifier(users, {
+ *   find: { age: { $gt: 18 } }
+ * });
+ *
+ * const withNameSort = createQueryModifier(users, {
+ *   sort: { name: 1 }
+ * });
+ *
+ * // 组合使用
+ * let query = db.select().from(users).$dynamic();
+ * query = withAgeFilter(query);
+ * query = withNameSort(query);
+ * const result = await query;
+ * ```
+ */
+export const createQueryModifier = <TTable extends Table>(
+	table: TTable,
+	request: Partial<QueryRequest>,
+) => {
+	return <TQueryBuilder extends PgSelect>(
+		queryBuilder: TQueryBuilder,
+	): TQueryBuilder => {
+		// 获取缓存的表元数据
+		const metadata = getOrCreateTableMetadata(table);
+
+		const context: QueryContext = {
+			columns: metadata.columns,
+			schemaShape: metadata.schemaShape,
+		};
+
+		let result = queryBuilder;
+
+		// 应用 where 条件
+		if (request.find) {
+			const ast = MONGO_QUERY_PARSER.parse(request.find);
+			const whereClause = convertConditionToSQL(ast, context);
+			if (whereClause) {
+				result = result.where(whereClause) as TQueryBuilder;
+			}
+		}
+
+		// 应用排序
+		if (request.sort) {
+			const orderByClause = buildOrderByClause(request.sort, context);
+			if (orderByClause.length > 0) {
+				result = result.orderBy(...orderByClause) as TQueryBuilder;
+			}
+		}
+
+		// 应用分页
+		if (request.limit !== undefined) {
+			result = result.limit(request.limit) as TQueryBuilder;
+		}
+
+		if (request.skip !== undefined) {
+			result = result.offset(request.skip) as TQueryBuilder;
+		}
+
+		return result;
+	};
+};
