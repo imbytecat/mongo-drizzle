@@ -4,5 +4,7 @@ import * as schema from "./schema";
 
 export * as schema from "./schema";
 
-const client = new SQL(process.env.DATABASE_URL!);
+import { env } from "../env";
+
+const client = new SQL(env.DATABASE_URL);
 export const db = drizzle({ client, schema });
