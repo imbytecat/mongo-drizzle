@@ -1,7 +1,7 @@
-import type { Condition } from '@ucast/core';
-import { CompoundCondition, FieldCondition } from '@ucast/core';
-import { allParsingInstructions, MongoQueryParser } from '@ucast/mongo';
-import type { Column, SQL, Table } from 'drizzle-orm';
+import type { Condition } from '@ucast/core'
+import { CompoundCondition, FieldCondition } from '@ucast/core'
+import { allParsingInstructions, MongoQueryParser } from '@ucast/mongo'
+import type { Column, SQL, Table } from 'drizzle-orm'
 import {
   and,
   asc,
@@ -17,20 +17,20 @@ import {
   not,
   notInArray,
   or,
-} from 'drizzle-orm';
-import { type PgSelectQueryBuilder, QueryBuilder } from 'drizzle-orm/pg-core';
-import { createSelectSchema } from 'drizzle-zod';
-import type { z } from 'zod';
-import type { QueryRequest } from './schema';
+} from 'drizzle-orm'
+import { type PgSelectQueryBuilder, QueryBuilder } from 'drizzle-orm/pg-core'
+import { createSelectSchema } from 'drizzle-zod'
+import type { z } from 'zod'
+import type { QueryRequest } from './schema'
 
 // --- 常量定义 ---
 
-const MONGO_QUERY_PARSER = new MongoQueryParser(allParsingInstructions);
+const MONGO_QUERY_PARSER = new MongoQueryParser(allParsingInstructions)
 
 const SORT_DIRECTION = {
   ASC: 1,
   DESC: -1,
-} as const;
+} as const
 
 // --- 类型定义 ---
 
@@ -42,18 +42,18 @@ type ComparisonOperator =
   | 'lt'
   | 'lte'
   | 'ne'
-  | 'nin';
+  | 'nin'
 
-type LogicalOperator = 'and' | 'or' | 'not' | 'nor';
+type LogicalOperator = 'and' | 'or' | 'not' | 'nor'
 
 interface QueryContext {
-  readonly columns: Readonly<Record<string, Column>>;
-  readonly schemaShape: Readonly<Record<string, z.ZodTypeAny>>;
+  readonly columns: Readonly<Record<string, Column>>
+  readonly schemaShape: Readonly<Record<string, z.ZodTypeAny>>
 }
 
 interface TableMetadata {
-  readonly columns: Record<string, Column>;
-  readonly schemaShape: Record<string, z.ZodTypeAny>;
+  readonly columns: Record<string, Column>
+  readonly schemaShape: Record<string, z.ZodTypeAny>
 }
 
 // --- 缓存层 ---
@@ -62,24 +62,24 @@ interface TableMetadata {
  * 使用 WeakMap 缓存表的元数据（columns + schema）
  * WeakMap 的优势：当 table 对象被垃圾回收时，缓存会自动清理
  */
-const tableMetadataCache = new WeakMap<Table, TableMetadata>();
+const tableMetadataCache = new WeakMap<Table, TableMetadata>()
 
 /**
  * 获取或创建表的元数据（columns 和 schema）
  */
 const getOrCreateTableMetadata = (table: Table): TableMetadata => {
-  let metadata = tableMetadataCache.get(table);
+  let metadata = tableMetadataCache.get(table)
 
   if (!metadata) {
     metadata = {
       columns: getTableColumns(table),
       schemaShape: createSelectSchema(table).shape,
-    };
-    tableMetadataCache.set(table, metadata);
+    }
+    tableMetadataCache.set(table, metadata)
   }
 
-  return metadata;
-};
+  return metadata
+}
 
 // --- 辅助函数 ---
 
@@ -88,7 +88,7 @@ const getOrCreateTableMetadata = (table: Table): TableMetadata => {
  * 用于清理可能包含 undefined 的 SQL 数组
  */
 const filterDefinedSQL = (sqlArray: readonly (SQL | undefined)[]): SQL[] =>
-  sqlArray.filter((x): x is SQL => x !== undefined);
+  sqlArray.filter((x): x is SQL => x !== undefined)
 
 /**
  * 使用 Zod schema 解析和验证值
@@ -99,9 +99,9 @@ const parseAndValidateValue = (
   value: unknown,
   schema: z.ZodTypeAny,
 ): unknown => {
-  const result = schema.safeParse(value);
-  return result.success ? result.data : undefined;
-};
+  const result = schema.safeParse(value)
+  return result.success ? result.data : undefined
+}
 
 /**
  * 处理数组类型的过滤操作（in/nin）
@@ -113,10 +113,10 @@ const createArrayFilterSQL = (
   sqlFunction: (col: Column, val: unknown[]) => SQL,
 ): SQL | undefined => {
   if (!Array.isArray(values) || values.length === 0) {
-    return undefined;
+    return undefined
   }
-  return sqlFunction(column, values);
-};
+  return sqlFunction(column, values)
+}
 
 // --- 运算符映射 ---
 
@@ -136,7 +136,7 @@ const COMPARISON_OPERATORS: Record<
   ne,
   in: (col, val) => createArrayFilterSQL(col, val, inArray),
   nin: (col, val) => createArrayFilterSQL(col, val, notInArray),
-};
+}
 
 /**
  * 逻辑运算符到 Drizzle SQL 函数的映射
@@ -150,11 +150,11 @@ const LOGICAL_OPERATORS: Record<
   or: (...args) => or(...filterDefinedSQL(args)),
   not: (arg) => (arg ? not(arg) : undefined),
   nor: (...args) => {
-    const validConditions = filterDefinedSQL(args);
-    const orClause = or(...validConditions);
-    return orClause ? not(orClause) : undefined;
+    const validConditions = filterDefinedSQL(args)
+    const orClause = or(...validConditions)
+    return orClause ? not(orClause) : undefined
   },
-};
+}
 
 // --- 核心转换逻辑 ---
 
@@ -166,43 +166,43 @@ const processFieldCondition = (
   condition: FieldCondition,
   context: QueryContext,
 ): SQL | undefined => {
-  const { field, value: rawValue, operator } = condition;
-  const op = operator as ComparisonOperator;
+  const { field, value: rawValue, operator } = condition
+  const op = operator as ComparisonOperator
 
-  const column = context.columns[field];
-  const fieldSchema = context.schemaShape[field];
+  const column = context.columns[field]
+  const fieldSchema = context.schemaShape[field]
 
   // 提前返回：字段或 schema 不存在
   if (!column || !fieldSchema) {
-    return undefined;
+    return undefined
   }
 
-  const filterFunction = COMPARISON_OPERATORS[op];
+  const filterFunction = COMPARISON_OPERATORS[op]
   if (!filterFunction) {
-    return undefined;
+    return undefined
   }
 
   // 数组操作符特殊处理：批量验证
   if (op === 'in' || op === 'nin') {
     if (!Array.isArray(rawValue)) {
-      return undefined;
+      return undefined
     }
 
     const validValues = rawValue
       .map((v) => parseAndValidateValue(v, fieldSchema))
-      .filter((v) => v !== undefined);
+      .filter((v) => v !== undefined)
 
     return validValues.length > 0
       ? filterFunction(column, validValues)
-      : undefined;
+      : undefined
   }
 
   // 单值操作符：直接验证
-  const validatedValue = parseAndValidateValue(rawValue, fieldSchema);
+  const validatedValue = parseAndValidateValue(rawValue, fieldSchema)
   return validatedValue !== undefined
     ? filterFunction(column, validatedValue)
-    : undefined;
-};
+    : undefined
+}
 
 /**
  * 处理复合条件（逻辑操作）
@@ -212,19 +212,19 @@ const processCompoundCondition = (
   condition: CompoundCondition,
   context: QueryContext,
 ): SQL | undefined => {
-  const op = condition.operator as LogicalOperator;
-  const logicalFunction = LOGICAL_OPERATORS[op];
+  const op = condition.operator as LogicalOperator
+  const logicalFunction = LOGICAL_OPERATORS[op]
 
   if (!logicalFunction) {
-    return undefined;
+    return undefined
   }
 
   const childConditions = condition.value.map((cond) =>
     convertConditionToSQL(cond, context),
-  );
+  )
 
-  return logicalFunction(...childConditions);
-};
+  return logicalFunction(...childConditions)
+}
 
 /**
  * 将 AST 条件节点转换为 Drizzle SQL
@@ -235,15 +235,15 @@ const convertConditionToSQL = (
   context: QueryContext,
 ): SQL | undefined => {
   if (astNode instanceof CompoundCondition) {
-    return processCompoundCondition(astNode, context);
+    return processCompoundCondition(astNode, context)
   }
 
   if (astNode instanceof FieldCondition) {
-    return processFieldCondition(astNode, context);
+    return processFieldCondition(astNode, context)
   }
 
-  return undefined;
-};
+  return undefined
+}
 
 /**
  * 构建排序子句
@@ -254,20 +254,20 @@ const buildOrderByClause = (
   context: QueryContext,
 ): SQL[] => {
   if (!sort) {
-    return [];
+    return []
   }
 
   return filterDefinedSQL(
     Object.entries(sort).map(([field, direction]) => {
-      const column = context.columns[field];
+      const column = context.columns[field]
       if (!column) {
-        return undefined;
+        return undefined
       }
 
-      return direction === SORT_DIRECTION.ASC ? asc(column) : desc(column);
+      return direction === SORT_DIRECTION.ASC ? asc(column) : desc(column)
     }),
-  );
-};
+  )
+}
 
 export const withMongoQuery = <TTable extends Table>(
   table: TTable,
@@ -275,56 +275,56 @@ export const withMongoQuery = <TTable extends Table>(
 ) => {
   return <T extends PgSelectQueryBuilder>(queryBuilder: T): T => {
     // 获取缓存的表元数据
-    const metadata = getOrCreateTableMetadata(table);
+    const metadata = getOrCreateTableMetadata(table)
 
     const context: QueryContext = {
       columns: metadata.columns,
       schemaShape: metadata.schemaShape,
-    };
+    }
 
-    let result = queryBuilder;
+    let result = queryBuilder
 
     // 应用 where 条件
     if (request.find) {
-      const ast = MONGO_QUERY_PARSER.parse(request.find);
-      const whereClause = convertConditionToSQL(ast, context);
+      const ast = MONGO_QUERY_PARSER.parse(request.find)
+      const whereClause = convertConditionToSQL(ast, context)
       if (whereClause) {
-        result = result.where(whereClause);
+        result = result.where(whereClause)
       }
     }
 
     // 应用排序
     if (request.sort) {
-      const orderByClause = buildOrderByClause(request.sort, context);
+      const orderByClause = buildOrderByClause(request.sort, context)
       if (orderByClause.length > 0) {
-        result = result.orderBy(...orderByClause);
+        result = result.orderBy(...orderByClause)
       }
     }
 
     // 应用分页
     if (request.limit !== undefined) {
-      result = result.limit(request.limit);
+      result = result.limit(request.limit)
     }
 
     if (request.skip !== undefined) {
-      result = result.offset(request.skip);
+      result = result.offset(request.skip)
     }
 
-    return result;
-  };
-};
+    return result
+  }
+}
 
 export const mongoQueryBuilder = <TTable extends Table>(
   table: TTable,
   request: QueryRequest,
 ) => {
-  const qb = new QueryBuilder();
+  const qb = new QueryBuilder()
   let query = qb
     .select()
     // biome-ignore lint/suspicious/noExplicitAny: 目前无法解决空表推断
     .from(table as any)
-    .$dynamic();
-  const withMongo = withMongoQuery(table, request);
-  query = withMongo(query);
-  return query;
-};
+    .$dynamic()
+  const withMongo = withMongoQuery(table, request)
+  query = withMongo(query)
+  return query
+}
