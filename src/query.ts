@@ -67,7 +67,7 @@ const tableMetadataCache = new WeakMap<Table, TableMetadata>()
 /**
  * 获取或创建表的元数据（columns 和 schema）
  */
-const getOrCreateTableMetadata = (table: Table): TableMetadata => {
+const getTableMetadata = (table: Table): TableMetadata => {
   let metadata = tableMetadataCache.get(table)
 
   if (!metadata) {
@@ -275,7 +275,7 @@ export const withMongoQuery = <TTable extends Table>(
 ) => {
   return <T extends PgSelectQueryBuilder>(queryBuilder: T): T => {
     // 获取缓存的表元数据
-    const metadata = getOrCreateTableMetadata(table)
+    const metadata = getTableMetadata(table)
 
     const context: QueryContext = {
       columns: metadata.columns,
