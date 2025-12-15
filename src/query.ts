@@ -100,15 +100,12 @@ const ISO8601_REGEX =
 /**
  * 类型守卫:检查对象是否是 Zod schema
  */
-const isZodSchema = (value: unknown): value is z.ZodTypeAny => {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    '_zod' in value &&
-    typeof value._zod === 'object' &&
-    value._zod !== null
-  )
-}
+const isZodSchema = (value: unknown): value is z.ZodTypeAny =>
+  typeof value === 'object' &&
+  value !== null &&
+  '_zod' in value &&
+  typeof value._zod === 'object' &&
+  value._zod !== null
 
 /**
  * 检查 Zod schema 是否是日期类型
@@ -116,31 +113,18 @@ const isZodSchema = (value: unknown): value is z.ZodTypeAny => {
  */
 const isDateSchema = (schema: z.ZodTypeAny): boolean => {
   const def = schema._zod?.def
+  if (!def) return false
 
-  if (!def) {
-    return false
-  }
+  // 直接是日期类型
+  if (def.type === 'date') return true
 
-  // 直接检查是否是 date 类型
-  if (def.type === 'date') {
-    return true
-  }
+  // 递归检查包装类型
+  const innerSchema =
+    def.type === 'transform' && 'schema' in def ? def.schema
+    : (def.type === 'optional' || def.type === 'nullable') && 'innerType' in def ? def.innerType
+    : null
 
-  // ZodTransform 包装的情况(例如 .transform())
-  if (def.type === 'transform' && 'schema' in def && isZodSchema(def.schema)) {
-    return isDateSchema(def.schema)
-  }
-
-  // ZodOptional 或 ZodNullable 包装的情况
-  if (
-    (def.type === 'optional' || def.type === 'nullable') &&
-    'innerType' in def &&
-    isZodSchema(def.innerType)
-  ) {
-    return isDateSchema(def.innerType)
-  }
-
-  return false
+  return Boolean(innerSchema && isZodSchema(innerSchema) && isDateSchema(innerSchema))
 }
 
 /**
