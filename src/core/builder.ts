@@ -1,6 +1,6 @@
 import type { SQL, Table } from 'drizzle-orm'
 import { asc, desc } from 'drizzle-orm'
-import { type PgSelectQueryBuilder, QueryBuilder } from 'drizzle-orm/pg-core'
+import type { PgSelect } from 'drizzle-orm/pg-core'
 import { MONGO_QUERY_PARSER, SORT_DIRECTION } from '#/constants'
 import type { QueryRequest } from '#/schema'
 import type { QueryContext } from '#/types'
@@ -32,15 +32,11 @@ const buildOrderByClause = (
   )
 }
 
-/**
- * 应用 MongoDB 查询到 Drizzle 查询构建器
- */
-export const withMongoQuery = <TTable extends Table>(
+export const applyMongoQuery = <TTable extends Table>(
   table: TTable,
   request: QueryRequest,
 ) => {
-  return <T extends PgSelectQueryBuilder>(queryBuilder: T): T => {
-    // 获取缓存的表元数据
+  return <T extends PgSelect>(queryBuilder: T): T => {
     const metadata = getTableMetadata(table)
 
     const context: QueryContext = {
@@ -48,14 +44,14 @@ export const withMongoQuery = <TTable extends Table>(
       schemaShape: metadata.schemaShape,
     }
 
-    let result = queryBuilder
+    let query = queryBuilder
 
     // 应用 where 条件
     if (request.find) {
       const ast = MONGO_QUERY_PARSER.parse(request.find)
       const whereClause = convertConditionToSQL(ast, context)
       if (whereClause) {
-        result = result.where(whereClause)
+        query = query.where(whereClause)
       }
     }
 
@@ -63,35 +59,19 @@ export const withMongoQuery = <TTable extends Table>(
     if (request.sort) {
       const orderByClause = buildOrderByClause(request.sort, context)
       if (orderByClause.length > 0) {
-        result = result.orderBy(...orderByClause)
+        query = query.orderBy(...orderByClause)
       }
     }
 
     // 应用分页
     if (request.limit !== undefined) {
-      result = result.limit(request.limit)
+      query = query.limit(request.limit)
     }
 
     if (request.skip !== undefined) {
-      result = result.offset(request.skip)
+      query = query.offset(request.skip)
     }
 
-    return result
+    return query
   }
-}
-
-/**
- * MongoDB 风格的查询构建器
- */
-export const mongoQueryBuilder = <TTable extends Table>(
-  table: TTable,
-  request: QueryRequest,
-) => {
-  let qb = new QueryBuilder()
-    .select()
-    // biome-ignore lint/suspicious/noExplicitAny: 目前无法解决空表推断
-    .from(table as any)
-    .$dynamic()
-  qb = withMongoQuery(table, request)(qb)
-  return qb
 }

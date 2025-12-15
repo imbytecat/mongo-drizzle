@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { Decimal } from 'decimal.js'
-import { mongoQueryBuilder } from '#/index'
+import { applyMongoQuery } from '#/core'
 import { db, schema } from './db'
 import { data } from './fixtures'
 
@@ -15,7 +15,7 @@ describe('mongoQueryBuilder', () => {
 
   describe('过滤查询', () => {
     it('应该正确过滤 numeric 字段的 $lte 操作符', async () => {
-      const qb = mongoQueryBuilder(schema.tests, {
+      const withMongoQuery = applyMongoQuery(schema.tests, {
         find: {
           numeric: {
             $lte: '18',
@@ -26,7 +26,9 @@ describe('mongoQueryBuilder', () => {
         },
       })
 
-      const result = await db.execute(qb)
+      const result = await withMongoQuery(
+        db.select().from(schema.tests).$dynamic(),
+      )
 
       // 验证所有结果的 numeric 字段都小于等于 18
       result.forEach((row) => {
@@ -37,7 +39,7 @@ describe('mongoQueryBuilder', () => {
 
     it('应该正确过滤 timestamp 字段的 $lte 操作符', async () => {
       const targetDate = '2025-01-01T00:00:00.000Z'
-      const qb = mongoQueryBuilder(schema.tests, {
+      const withMongoQuery = applyMongoQuery(schema.tests, {
         find: {
           timestamp: {
             $lte: targetDate,
@@ -48,7 +50,9 @@ describe('mongoQueryBuilder', () => {
         },
       })
 
-      const result = await db.execute(qb)
+      const result = await withMongoQuery(
+        db.select().from(schema.tests).$dynamic(),
+      )
 
       // 验证所有结果的 timestamp 都在目标日期之前
       const targetTimestamp = new Date(targetDate).getTime()
@@ -61,14 +65,16 @@ describe('mongoQueryBuilder', () => {
 
   describe('排序功能', () => {
     it('应该按 numeric 字段升序排序', async () => {
-      const qb = mongoQueryBuilder(schema.tests, {
+      const withMongoQuery = applyMongoQuery(schema.tests, {
         find: {},
         sort: {
           numeric: 1,
         },
       })
 
-      const result = await db.execute(qb)
+      const result = await withMongoQuery(
+        db.select().from(schema.tests).$dynamic(),
+      )
 
       // 验证结果是升序排列的
       for (let i = 0; i < result.length - 1; i++) {

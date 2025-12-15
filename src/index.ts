@@ -7,7 +7,7 @@
 // 导出常量（如果需要）
 export { SORT_DIRECTION } from './constants'
 // 导出核心功能
-export { mongoQueryBuilder, withMongoQuery } from './core'
+export { applyMongoQuery } from './core'
 // 导出类型定义
 export type {
   ComparisonOperator,
