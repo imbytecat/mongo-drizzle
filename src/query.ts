@@ -18,7 +18,11 @@ import {
 	notInArray,
 	or,
 } from "drizzle-orm";
-import { type PgSelect, QueryBuilder } from "drizzle-orm/pg-core";
+import {
+	type PgSelect,
+	type PgSelectQueryBuilder,
+	QueryBuilder,
+} from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-zod";
 import type { z } from "zod";
 import type { QueryRequest } from "./schema";
@@ -273,7 +277,7 @@ export const withMongoQuery = <TTable extends Table>(
 	table: TTable,
 	request: QueryRequest,
 ) => {
-	return <T extends PgSelect>(queryBuilder: T): T => {
+	return <T extends PgSelectQueryBuilder>(queryBuilder: T): T => {
 		// 获取缓存的表元数据
 		const metadata = getOrCreateTableMetadata(table);
 
@@ -314,7 +318,16 @@ export const withMongoQuery = <TTable extends Table>(
 	};
 };
 
-export const mongoQueryBuilder = <TTable extends Table>(table: TTable) => {
+export const mongoQueryBuilder = <TTable extends Table>(
+	table: TTable,
+	request: QueryRequest,
+) => {
 	const qb = new QueryBuilder();
-	qb.select().from(table).$dynamic();
+	let query = qb
+		.select()
+		.from(table as any)
+		.$dynamic();
+	const withMongo = withMongoQuery(table, request);
+	query = withMongo(query);
+	return query;
 };
