@@ -1,7 +1,7 @@
 import type { SQL } from 'drizzle-orm'
 import { and, not, or } from 'drizzle-orm'
-import type { LogicalOperator } from '../types'
-import { filterDefinedSQL } from '../utils'
+import type { LogicalOperator } from '#/types'
+import { filterDefinedSQL } from '#/utils'
 
 /**
  * 逻辑运算符到 Drizzle SQL 函数的映射

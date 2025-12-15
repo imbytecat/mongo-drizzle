@@ -1,13 +1,9 @@
 import type { Condition } from '@ucast/core'
 import { CompoundCondition, FieldCondition } from '@ucast/core'
 import type { SQL } from 'drizzle-orm'
-import { COMPARISON_OPERATORS, LOGICAL_OPERATORS } from '../operators'
-import type {
-  ComparisonOperator,
-  LogicalOperator,
-  QueryContext,
-} from '../types'
-import { parseAndValidateValue } from '../utils'
+import { COMPARISON_OPERATORS, LOGICAL_OPERATORS } from '#/operators'
+import type { ComparisonOperator, LogicalOperator, QueryContext } from '#/types'
+import { parseAndValidateValue } from '#/utils'
 
 /**
  * 处理字段条件（比较操作）

@@ -1,7 +1,7 @@
 import type { Column, SQL } from 'drizzle-orm'
 import { eq, gt, gte, inArray, lt, lte, ne, notInArray } from 'drizzle-orm'
-import type { ComparisonOperator } from '../types'
-import { createArrayFilterSQL } from '../utils'
+import type { ComparisonOperator } from '#/types'
+import { createArrayFilterSQL } from '#/utils'
 
 /**
  * 比较运算符到 Drizzle SQL 函数的映射
