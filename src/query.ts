@@ -1,59 +1,59 @@
-import type { Condition } from "@ucast/core";
-import { CompoundCondition, FieldCondition } from "@ucast/core";
-import { allParsingInstructions, MongoQueryParser } from "@ucast/mongo";
-import type { Column, SQL, Table } from "drizzle-orm";
+import type { Condition } from '@ucast/core';
+import { CompoundCondition, FieldCondition } from '@ucast/core';
+import { allParsingInstructions, MongoQueryParser } from '@ucast/mongo';
+import type { Column, SQL, Table } from 'drizzle-orm';
 import {
-	and,
-	asc,
-	desc,
-	eq,
-	getTableColumns,
-	gt,
-	gte,
-	inArray,
-	lt,
-	lte,
-	ne,
-	not,
-	notInArray,
-	or,
-} from "drizzle-orm";
-import { type PgSelectQueryBuilder, QueryBuilder } from "drizzle-orm/pg-core";
-import { createSelectSchema } from "drizzle-zod";
-import type { z } from "zod";
-import type { QueryRequest } from "./schema";
+  and,
+  asc,
+  desc,
+  eq,
+  getTableColumns,
+  gt,
+  gte,
+  inArray,
+  lt,
+  lte,
+  ne,
+  not,
+  notInArray,
+  or,
+} from 'drizzle-orm';
+import { type PgSelectQueryBuilder, QueryBuilder } from 'drizzle-orm/pg-core';
+import { createSelectSchema } from 'drizzle-zod';
+import type { z } from 'zod';
+import type { QueryRequest } from './schema';
 
 // --- 常量定义 ---
 
 const MONGO_QUERY_PARSER = new MongoQueryParser(allParsingInstructions);
 
 const SORT_DIRECTION = {
-	ASC: 1,
-	DESC: -1,
+  ASC: 1,
+  DESC: -1,
 } as const;
 
 // --- 类型定义 ---
 
 type ComparisonOperator =
-	| "eq"
-	| "gt"
-	| "gte"
-	| "in"
-	| "lt"
-	| "lte"
-	| "ne"
-	| "nin";
+  | 'eq'
+  | 'gt'
+  | 'gte'
+  | 'in'
+  | 'lt'
+  | 'lte'
+  | 'ne'
+  | 'nin';
 
-type LogicalOperator = "and" | "or" | "not" | "nor";
+type LogicalOperator = 'and' | 'or' | 'not' | 'nor';
 
 interface QueryContext {
-	readonly columns: Readonly<Record<string, Column>>;
-	readonly schemaShape: Readonly<Record<string, z.ZodTypeAny>>;
+  readonly columns: Readonly<Record<string, Column>>;
+  readonly schemaShape: Readonly<Record<string, z.ZodTypeAny>>;
 }
 
 interface TableMetadata {
-	readonly columns: Record<string, Column>;
-	readonly schemaShape: Record<string, z.ZodTypeAny>;
+  readonly columns: Record<string, Column>;
+  readonly schemaShape: Record<string, z.ZodTypeAny>;
 }
 
 // --- 缓存层 ---
@@ -68,17 +68,17 @@ const tableMetadataCache = new WeakMap<Table, TableMetadata>();
  * 获取或创建表的元数据（columns 和 schema）
  */
 const getOrCreateTableMetadata = (table: Table): TableMetadata => {
-	let metadata = tableMetadataCache.get(table);
+  let metadata = tableMetadataCache.get(table);
 
-	if (!metadata) {
-		metadata = {
-			columns: getTableColumns(table),
-			schemaShape: createSelectSchema(table).shape,
-		};
-		tableMetadataCache.set(table, metadata);
-	}
+  if (!metadata) {
+    metadata = {
+      columns: getTableColumns(table),
+      schemaShape: createSelectSchema(table).shape,
+    };
+    tableMetadataCache.set(table, metadata);
+  }
 
-	return metadata;
+  return metadata;
 };
 
 // --- 辅助函数 ---
@@ -88,7 +88,7 @@ const getOrCreateTableMetadata = (table: Table): TableMetadata => {
  * 用于清理可能包含 undefined 的 SQL 数组
  */
 const filterDefinedSQL = (sqlArray: readonly (SQL | undefined)[]): SQL[] =>
-	sqlArray.filter((x): x is SQL => x !== undefined);
+  sqlArray.filter((x): x is SQL => x !== undefined);
 
 /**
  * 使用 Zod schema 解析和验证值
@@ -96,11 +96,11 @@ const filterDefinedSQL = (sqlArray: readonly (SQL | undefined)[]): SQL[] =>
  * @returns 验证成功返回转换后的值，失败返回 undefined
  */
 const parseAndValidateValue = (
-	value: unknown,
-	schema: z.ZodTypeAny,
+  value: unknown,
+  schema: z.ZodTypeAny,
 ): unknown => {
-	const result = schema.safeParse(value);
-	return result.success ? result.data : undefined;
+  const result = schema.safeParse(value);
+  return result.success ? result.data : undefined;
 };
 
 /**
@@ -108,14 +108,14 @@ const parseAndValidateValue = (
  * 统一处理空数组和非数组情况
  */
 const createArrayFilterSQL = (
-	column: Column,
-	values: unknown,
-	sqlFunction: (col: Column, val: unknown[]) => SQL,
+  column: Column,
+  values: unknown,
+  sqlFunction: (col: Column, val: unknown[]) => SQL,
 ): SQL | undefined => {
-	if (!Array.isArray(values) || values.length === 0) {
-		return undefined;
-	}
-	return sqlFunction(column, values);
+  if (!Array.isArray(values) || values.length === 0) {
+    return undefined;
+  }
+  return sqlFunction(column, values);
 };
 
 // --- 运算符映射 ---
@@ -125,17 +125,17 @@ const createArrayFilterSQL = (
  * 所有运算符都返回 SQL | undefined 以支持链式处理
  */
 const COMPARISON_OPERATORS: Record<
-	ComparisonOperator,
-	(column: Column, value: unknown) => SQL | undefined
+  ComparisonOperator,
+  (column: Column, value: unknown) => SQL | undefined
 > = {
-	eq,
-	gt,
-	gte,
-	lt,
-	lte,
-	ne,
-	in: (col, val) => createArrayFilterSQL(col, val, inArray),
-	nin: (col, val) => createArrayFilterSQL(col, val, notInArray),
+  eq,
+  gt,
+  gte,
+  lt,
+  lte,
+  ne,
+  in: (col, val) => createArrayFilterSQL(col, val, inArray),
+  nin: (col, val) => createArrayFilterSQL(col, val, notInArray),
 };
 
 /**
@@ -143,17 +143,17 @@ const COMPARISON_OPERATORS: Record<
  * 处理 AND、OR、NOT、NOR 等复合条件
  */
 const LOGICAL_OPERATORS: Record<
-	LogicalOperator,
-	(...args: readonly (SQL | undefined)[]) => SQL | undefined
+  LogicalOperator,
+  (...args: readonly (SQL | undefined)[]) => SQL | undefined
 > = {
-	and: (...args) => and(...filterDefinedSQL(args)),
-	or: (...args) => or(...filterDefinedSQL(args)),
-	not: (arg) => (arg ? not(arg) : undefined),
-	nor: (...args) => {
-		const validConditions = filterDefinedSQL(args);
-		const orClause = or(...validConditions);
-		return orClause ? not(orClause) : undefined;
-	},
+  and: (...args) => and(...filterDefinedSQL(args)),
+  or: (...args) => or(...filterDefinedSQL(args)),
+  not: (arg) => (arg ? not(arg) : undefined),
+  nor: (...args) => {
+    const validConditions = filterDefinedSQL(args);
+    const orClause = or(...validConditions);
+    return orClause ? not(orClause) : undefined;
+  },
 };
 
 // --- 核心转换逻辑 ---
@@ -163,45 +163,45 @@ const LOGICAL_OPERATORS: Record<
  * 负责值验证、类型转换和 SQL 生成
  */
 const processFieldCondition = (
-	condition: FieldCondition,
-	context: QueryContext,
+  condition: FieldCondition,
+  context: QueryContext,
 ): SQL | undefined => {
-	const { field, value: rawValue, operator } = condition;
-	const op = operator as ComparisonOperator;
+  const { field, value: rawValue, operator } = condition;
+  const op = operator as ComparisonOperator;
 
-	const column = context.columns[field];
-	const fieldSchema = context.schemaShape[field];
+  const column = context.columns[field];
+  const fieldSchema = context.schemaShape[field];
 
-	// 提前返回：字段或 schema 不存在
-	if (!column || !fieldSchema) {
-		return undefined;
-	}
+  // 提前返回：字段或 schema 不存在
+  if (!column || !fieldSchema) {
+    return undefined;
+  }
 
-	const filterFunction = COMPARISON_OPERATORS[op];
-	if (!filterFunction) {
-		return undefined;
-	}
+  const filterFunction = COMPARISON_OPERATORS[op];
+  if (!filterFunction) {
+    return undefined;
+  }
 
-	// 数组操作符特殊处理：批量验证
-	if (op === "in" || op === "nin") {
-		if (!Array.isArray(rawValue)) {
-			return undefined;
-		}
+  // 数组操作符特殊处理：批量验证
+  if (op === 'in' || op === 'nin') {
+    if (!Array.isArray(rawValue)) {
+      return undefined;
+    }
 
-		const validValues = rawValue
-			.map((v) => parseAndValidateValue(v, fieldSchema))
-			.filter((v) => v !== undefined);
+    const validValues = rawValue
+      .map((v) => parseAndValidateValue(v, fieldSchema))
+      .filter((v) => v !== undefined);
 
-		return validValues.length > 0
-			? filterFunction(column, validValues)
-			: undefined;
-	}
+    return validValues.length > 0
+      ? filterFunction(column, validValues)
+      : undefined;
+  }
 
-	// 单值操作符：直接验证
-	const validatedValue = parseAndValidateValue(rawValue, fieldSchema);
-	return validatedValue !== undefined
-		? filterFunction(column, validatedValue)
-		: undefined;
+  // 单值操作符：直接验证
+  const validatedValue = parseAndValidateValue(rawValue, fieldSchema);
+  return validatedValue !== undefined
+    ? filterFunction(column, validatedValue)
+    : undefined;
 };
 
 /**
@@ -209,21 +209,21 @@ const processFieldCondition = (
  * 递归处理嵌套的 AND/OR/NOT/NOR 条件
  */
 const processCompoundCondition = (
-	condition: CompoundCondition,
-	context: QueryContext,
+  condition: CompoundCondition,
+  context: QueryContext,
 ): SQL | undefined => {
-	const op = condition.operator as LogicalOperator;
-	const logicalFunction = LOGICAL_OPERATORS[op];
+  const op = condition.operator as LogicalOperator;
+  const logicalFunction = LOGICAL_OPERATORS[op];
 
-	if (!logicalFunction) {
-		return undefined;
-	}
+  if (!logicalFunction) {
+    return undefined;
+  }
 
-	const childConditions = condition.value.map((cond) =>
-		convertConditionToSQL(cond, context),
-	);
+  const childConditions = condition.value.map((cond) =>
+    convertConditionToSQL(cond, context),
+  );
 
-	return logicalFunction(...childConditions);
+  return logicalFunction(...childConditions);
 };
 
 /**
@@ -231,18 +231,18 @@ const processCompoundCondition = (
  * 这是查询转换的核心入口函数
  */
 const convertConditionToSQL = (
-	astNode: Condition,
-	context: QueryContext,
+  astNode: Condition,
+  context: QueryContext,
 ): SQL | undefined => {
-	if (astNode instanceof CompoundCondition) {
-		return processCompoundCondition(astNode, context);
-	}
+  if (astNode instanceof CompoundCondition) {
+    return processCompoundCondition(astNode, context);
+  }
 
-	if (astNode instanceof FieldCondition) {
-		return processFieldCondition(astNode, context);
-	}
+  if (astNode instanceof FieldCondition) {
+    return processFieldCondition(astNode, context);
+  }
 
-	return undefined;
+  return undefined;
 };
 
 /**
@@ -250,81 +250,81 @@ const convertConditionToSQL = (
  * 将 MongoDB 风格的排序对象转换为 Drizzle ORDER BY
  */
 const buildOrderByClause = (
-	sort: QueryRequest["sort"],
-	context: QueryContext,
+  sort: QueryRequest['sort'],
+  context: QueryContext,
 ): SQL[] => {
-	if (!sort) {
-		return [];
-	}
+  if (!sort) {
+    return [];
+  }
 
-	return filterDefinedSQL(
-		Object.entries(sort).map(([field, direction]) => {
-			const column = context.columns[field];
-			if (!column) {
-				return undefined;
-			}
+  return filterDefinedSQL(
+    Object.entries(sort).map(([field, direction]) => {
+      const column = context.columns[field];
+      if (!column) {
+        return undefined;
+      }
 
-			return direction === SORT_DIRECTION.ASC ? asc(column) : desc(column);
-		}),
-	);
+      return direction === SORT_DIRECTION.ASC ? asc(column) : desc(column);
+    }),
+  );
 };
 
 export const withMongoQuery = <TTable extends Table>(
-	table: TTable,
-	request: QueryRequest,
+  table: TTable,
+  request: QueryRequest,
 ) => {
-	return <T extends PgSelectQueryBuilder>(queryBuilder: T): T => {
-		// 获取缓存的表元数据
-		const metadata = getOrCreateTableMetadata(table);
+  return <T extends PgSelectQueryBuilder>(queryBuilder: T): T => {
+    // 获取缓存的表元数据
+    const metadata = getOrCreateTableMetadata(table);
 
-		const context: QueryContext = {
-			columns: metadata.columns,
-			schemaShape: metadata.schemaShape,
-		};
+    const context: QueryContext = {
+      columns: metadata.columns,
+      schemaShape: metadata.schemaShape,
+    };
 
-		let result = queryBuilder;
+    let result = queryBuilder;
 
-		// 应用 where 条件
-		if (request.find) {
-			const ast = MONGO_QUERY_PARSER.parse(request.find);
-			const whereClause = convertConditionToSQL(ast, context);
-			if (whereClause) {
-				result = result.where(whereClause);
-			}
-		}
+    // 应用 where 条件
+    if (request.find) {
+      const ast = MONGO_QUERY_PARSER.parse(request.find);
+      const whereClause = convertConditionToSQL(ast, context);
+      if (whereClause) {
+        result = result.where(whereClause);
+      }
+    }
 
-		// 应用排序
-		if (request.sort) {
-			const orderByClause = buildOrderByClause(request.sort, context);
-			if (orderByClause.length > 0) {
-				result = result.orderBy(...orderByClause);
-			}
-		}
+    // 应用排序
+    if (request.sort) {
+      const orderByClause = buildOrderByClause(request.sort, context);
+      if (orderByClause.length > 0) {
+        result = result.orderBy(...orderByClause);
+      }
+    }
 
-		// 应用分页
-		if (request.limit !== undefined) {
-			result = result.limit(request.limit);
-		}
+    // 应用分页
+    if (request.limit !== undefined) {
+      result = result.limit(request.limit);
+    }
 
-		if (request.skip !== undefined) {
-			result = result.offset(request.skip);
-		}
+    if (request.skip !== undefined) {
+      result = result.offset(request.skip);
+    }
 
-		return result;
-	};
+    return result;
+  };
 };
 
 export const mongoQueryBuilder = <TTable extends Table>(
-	table: TTable,
-	request: QueryRequest,
+  table: TTable,
+  request: QueryRequest,
 ) => {
-	const qb = new QueryBuilder();
-	let query = qb
-		.select()
-		// biome-ignore lint/suspicious/noExplicitAny: 目前无法解决空表推断
-		.from(table as any)
-		.$dynamic();
-	const withMongo = withMongoQuery(table, request);
-	query = withMongo(query);
-	return query;
+  const qb = new QueryBuilder();
+  let query = qb
+    .select()
+    // biome-ignore lint/suspicious/noExplicitAny: 目前无法解决空表推断
+    .from(table as any)
+    .$dynamic();
+  const withMongo = withMongoQuery(table, request);
+  query = withMongo(query);
+  return query;
 };
