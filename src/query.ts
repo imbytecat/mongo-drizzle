@@ -18,11 +18,7 @@ import {
 	notInArray,
 	or,
 } from "drizzle-orm";
-import {
-	type PgSelect,
-	type PgSelectQueryBuilder,
-	QueryBuilder,
-} from "drizzle-orm/pg-core";
+import { type PgSelectQueryBuilder, QueryBuilder } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-zod";
 import type { z } from "zod";
 import type { QueryRequest } from "./schema";
@@ -325,6 +321,7 @@ export const mongoQueryBuilder = <TTable extends Table>(
 	const qb = new QueryBuilder();
 	let query = qb
 		.select()
+		// biome-ignore lint/suspicious/noExplicitAny: 目前无法解决空表推断
 		.from(table as any)
 		.$dynamic();
 	const withMongo = withMongoQuery(table, request);
