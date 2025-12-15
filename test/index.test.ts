@@ -7,7 +7,7 @@ describe('applyMongoQuery', () => {
     const qb = mongoQueryBuilder(schema.tests, {
       find: {
         numeric: {
-          $lte: 18,
+          $lte: '18',
         },
       },
       sort: {
