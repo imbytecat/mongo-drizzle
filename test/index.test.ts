@@ -2,12 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { Decimal } from 'decimal.js'
 import { mongoQueryBuilder } from '#/index'
 import { db, schema } from './db'
-import { fixtures } from './fixtures'
+import { data } from './fixtures'
 
 describe('mongoQueryBuilder', () => {
   beforeAll(async () => {
-    const testData = fixtures.tests.basic()
-    await db.insert(schema.tests).values(testData)
+    await db.insert(schema.tests).values(data)
   })
 
   afterAll(async () => {
