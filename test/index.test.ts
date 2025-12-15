@@ -4,7 +4,7 @@ import { schema } from './db'
 
 describe('applyMongoQuery', () => {
   it('should return the correct result', async () => {
-    const query = mongoQueryBuilder(schema.test, {
+    const query = mongoQueryBuilder(schema.tests, {
       find: {
         numeric: {
           $gte: 18,
