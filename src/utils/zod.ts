@@ -1,32 +1,25 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 import { parseValidDateString } from './date'
 
 /**
- * 类型守卫:检查对象是否是 Zod schema
+ * 检查对象是否是 Zod schema
  */
-const isZodSchema = (value: unknown): value is z.ZodType => {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    '_zod' in value &&
-    typeof (value as { _zod?: unknown })._zod === 'object' &&
-    (value as { _zod?: unknown })._zod !== null
-  )
-}
+const isZodSchema = (object: unknown) =>
+  object instanceof z.ZodType && object._zod !== undefined
 
 /**
  * 获取 schema 的内部类型
  */
-const unwrapSchema = (schema: z.ZodType): z.ZodType => {
+const unwrapSchema = <T extends z.ZodType>(schema: T): T => {
   // 使用 Zod v4 的 .unwrap() 方法 (ZodOptional, ZodNullable, ZodArray 等)
   if ('unwrap' in schema && typeof schema.unwrap === 'function') {
-    return schema.unwrap() as z.ZodType
+    return schema.unwrap()
   }
 
   // ZodTransform 需要访问内部 schema (文档有记录的内部结构)
   const def = schema._zod?.def
   if (def?.type === 'transform' && 'schema' in def && isZodSchema(def.schema)) {
-    return def.schema
+    return def.schema as T
   }
 
   return schema
