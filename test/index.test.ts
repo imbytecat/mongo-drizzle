@@ -29,7 +29,8 @@ describe('mongoQueryBuilder', () => {
     })
 
     it('应该正确过滤 timestamp 字段的 $lte 操作符', async () => {
-      const targetDate = '2025-01-01T00:00:00.000Z'
+      // const targetDate = '2025-01-01T00:00:00.000Z'
+      const targetDate = new Date('2025-01-01T00:00:00.000Z') // TODO: 解决 JSON 不能传输 Date 的问题
       const qb = mongoQueryBuilder(schema.tests, {
         find: {
           timestamp: {
