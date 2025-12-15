@@ -269,7 +269,7 @@ const buildOrderByClause = (
 	);
 };
 
-export const buildMongoQuery = <TTable extends Table>(
+export const withMongoQuery = <TTable extends Table>(
 	table: TTable,
 	request: QueryRequest,
 ) => {

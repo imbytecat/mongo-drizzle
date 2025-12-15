@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { buildMongoQuery } from "@/query";
+import { withMongoQuery } from "@/query";
 import { db, schema } from "./db";
 
 describe("applyMongoQuery", () => {
 	it("should return the correct result", async () => {
-		const withMongoQuery = buildMongoQuery(schema.test, {
+		const withCustomQuery = withMongoQuery(schema.test, {
 			find: {
 				numeric: {
 					$gte: 18,
@@ -12,7 +12,7 @@ describe("applyMongoQuery", () => {
 			},
 		});
 		let query = db.select().from(schema.test).$dynamic();
-		query = withMongoQuery(query);
+		query = withCustomQuery(query);
 		const result = await query;
 		expect(1).toBe(1);
 	});
