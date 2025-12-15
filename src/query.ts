@@ -318,13 +318,11 @@ export const mongoQueryBuilder = <TTable extends Table>(
   table: TTable,
   request: QueryRequest,
 ) => {
-  const qb = new QueryBuilder()
-  let query = qb
+  let qb = new QueryBuilder()
     .select()
     // biome-ignore lint/suspicious/noExplicitAny: 目前无法解决空表推断
     .from(table as any)
     .$dynamic()
-  const withMongo = withMongoQuery(table, request)
-  query = withMongo(query)
-  return query
+  qb = withMongoQuery(table, request)(qb)
+  return qb
 }
