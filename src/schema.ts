@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-// --- 2. 类型定义 ---
 export const queryRequestSchema = z
 	.object({
 		find: z.record(z.string(), z.any()).default({}),

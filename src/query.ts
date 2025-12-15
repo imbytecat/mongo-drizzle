@@ -274,9 +274,6 @@ const buildOrderByClause = (
 /**
  * 创建一个可组合的查询修饰器函数
  *
- * 允许你创建可重用的查询片段，类似 Drizzle 文档中的 withFriends 模式
- * 必须在 $dynamic() 模式下使用
- *
  * @example
  * ```typescript
  * // 定义可重用的查询修饰器
@@ -302,7 +299,7 @@ const buildOrderByClause = (
  */
 export const withMongoQuery = <TTable extends Table>(
 	table: TTable,
-	request: Partial<QueryRequest>,
+	request: QueryRequest,
 ) => {
 	return <T extends PgSelect>(queryBuilder: T): T => {
 		// 获取缓存的表元数据
