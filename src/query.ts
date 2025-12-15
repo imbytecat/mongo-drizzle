@@ -18,7 +18,7 @@ import {
 	notInArray,
 	or,
 } from "drizzle-orm";
-import type { PgSelect } from "drizzle-orm/pg-core";
+import { type PgSelect, QueryBuilder } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-zod";
 import type { z } from "zod";
 import type { QueryRequest } from "./schema";
@@ -312,4 +312,9 @@ export const withMongoQuery = <TTable extends Table>(
 
 		return result;
 	};
+};
+
+export const mongoQueryBuilder = <TTable extends Table>(table: TTable) => {
+	const qb = new QueryBuilder();
+	qb.select().from(table).$dynamic();
 };
