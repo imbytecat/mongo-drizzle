@@ -4,7 +4,7 @@ import { parseValidDateString } from './date'
 /**
  * 类型守卫:检查对象是否是 Zod schema
  */
-const isZodSchema = (value: unknown): value is z.ZodTypeAny => {
+const isZodSchema = (value: unknown): value is z.ZodType => {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -17,10 +17,10 @@ const isZodSchema = (value: unknown): value is z.ZodTypeAny => {
 /**
  * 获取 schema 的内部类型
  */
-const unwrapSchema = (schema: z.ZodTypeAny): z.ZodTypeAny => {
+const unwrapSchema = (schema: z.ZodType): z.ZodType => {
   // 使用 Zod v4 的 .unwrap() 方法 (ZodOptional, ZodNullable, ZodArray 等)
   if ('unwrap' in schema && typeof schema.unwrap === 'function') {
-    return schema.unwrap() as z.ZodTypeAny
+    return schema.unwrap() as z.ZodType
   }
 
   // ZodTransform 需要访问内部 schema (文档有记录的内部结构)
@@ -36,7 +36,7 @@ const unwrapSchema = (schema: z.ZodTypeAny): z.ZodTypeAny => {
  * 检查 Zod schema 是否是日期类型
  * 支持 ZodDate 和包装类型(optional, nullable, transform)
  */
-export const isDateSchema = (schema: z.ZodTypeAny): boolean => {
+export const isDateSchema = (schema: z.ZodType): boolean => {
   const def = schema._zod?.def
   if (!def) return false
 
@@ -57,10 +57,7 @@ export const isDateSchema = (schema: z.ZodTypeAny): boolean => {
  * 这是为了解决 JSON 传输时无法直接传递 Date 对象的问题
  * 只有当目标 schema 是日期类型时才会进行转换
  */
-export const preprocessValue = (
-  value: unknown,
-  schema: z.ZodTypeAny,
-): unknown => {
+export const preprocessValue = (value: unknown, schema: z.ZodType): unknown => {
   // 只有当 schema 是日期类型且值是字符串时才尝试转换
   if (isDateSchema(schema) && typeof value === 'string') {
     const date = parseValidDateString(value)
@@ -77,7 +74,7 @@ export const preprocessValue = (
  */
 export const parseAndValidateValue = (
   value: unknown,
-  schema: z.ZodTypeAny,
+  schema: z.ZodType,
 ): unknown => {
   const processedValue = preprocessValue(value, schema)
   const result = schema.safeParse(processedValue)

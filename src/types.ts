@@ -24,7 +24,7 @@ export type LogicalOperator = 'and' | 'or' | 'not' | 'nor'
  */
 export interface QueryContext {
   readonly columns: Readonly<Record<string, Column>>
-  readonly schemaShape: Readonly<Record<string, z.ZodTypeAny>>
+  readonly schemaShape: Readonly<Record<string, z.ZodType>>
 }
 
 /**
@@ -32,5 +32,5 @@ export interface QueryContext {
  */
 export interface TableMetadata {
   readonly columns: Record<string, Column>
-  readonly schemaShape: Record<string, z.ZodTypeAny>
+  readonly schemaShape: Record<string, z.ZodType>
 }
