@@ -2,11 +2,9 @@ import type { z } from 'zod'
 import { parseValidDateString } from './date'
 
 /**
- * 类型守卫:检查对象是否有 _zod 属性(是 Zod schema)
+ * 类型守卫:检查对象是否是 Zod schema
  */
-export const hasZodProperty = (
-  value: unknown,
-): value is { _zod: { def: unknown } } => {
+const isZodSchema = (value: unknown): value is z.ZodTypeAny => {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -17,23 +15,27 @@ export const hasZodProperty = (
 }
 
 /**
- * 类型守卫:检查对象是否是 Zod schema
+ * 获取 schema 的内部类型
+ *
+ * 使用 Zod v4 的官方 API:
+ * - `.unwrap()` 方法用于 ZodOptional 和 ZodNullable
+ * - `._zod.def.schema` 用于 ZodTransform (内部 API,但文档有记录)
+ *
+ * @see https://zod.dev - Zod v4 官方文档
  */
-export const isZodSchema = (value: unknown): value is z.ZodTypeAny => {
-  return hasZodProperty(value)
-}
+const unwrapSchema = (schema: z.ZodTypeAny): z.ZodTypeAny => {
+  // 使用 Zod v4 的 .unwrap() 方法 (ZodOptional, ZodNullable, ZodArray 等)
+  if ('unwrap' in schema && typeof schema.unwrap === 'function') {
+    return schema.unwrap() as z.ZodTypeAny
+  }
 
-/**
- * 获取包装类型的内部 schema
- */
-export const getInnerSchema = (def: {
-  type: string
-  schema?: unknown
-  innerType?: unknown
-}): unknown => {
-  if (def.type === 'transform') return def.schema
-  if (def.type === 'optional' || def.type === 'nullable') return def.innerType
-  return null
+  // ZodTransform 需要访问内部 schema (文档有记录的内部结构)
+  const def = schema._zod?.def
+  if (def?.type === 'transform' && 'schema' in def && isZodSchema(def.schema)) {
+    return def.schema
+  }
+
+  return schema
 }
 
 /**
@@ -47,11 +49,13 @@ export const isDateSchema = (schema: z.ZodTypeAny): boolean => {
   // 直接是日期类型
   if (def.type === 'date') return true
 
-  // 递归检查包装类型
-  const innerSchema = getInnerSchema(def)
-  return Boolean(
-    innerSchema && isZodSchema(innerSchema) && isDateSchema(innerSchema),
-  )
+  // 尝试解包并递归检查
+  const unwrapped = unwrapSchema(schema)
+  if (unwrapped !== schema) {
+    return isDateSchema(unwrapped)
+  }
+
+  return false
 }
 
 /**
