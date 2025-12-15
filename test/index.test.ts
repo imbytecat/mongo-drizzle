@@ -11,8 +11,9 @@ describe("applyMongoQuery", () => {
 				},
 			},
 		});
-		const query = db.select().from(schema.test).$dynamic();
-		const result = await withMongoQuery(query);
+		let query = db.select().from(schema.test).$dynamic();
+		query = withMongoQuery(query);
+		const result = await query;
 		expect(1).toBe(1);
 	});
 });

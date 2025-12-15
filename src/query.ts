@@ -269,34 +269,6 @@ const buildOrderByClause = (
 	);
 };
 
-// --- 公共 API ---
-
-/**
- * 创建一个可组合的查询修饰器函数
- *
- * @example
- * ```typescript
- * // 定义可重用的查询修饰器
- * const withAdults = withMongoQuery(users, {
- *   find: { age: { $gte: 18 } }
- * });
- *
- * const withActiveUsers = withMongoQuery(users, {
- *   find: { status: { $eq: 'active' } }
- * });
- *
- * const withNameSort = withMongoQuery(users, {
- *   sort: { name: 1 }
- * });
- *
- * // 组合使用（必须使用 $dynamic()）
- * let query = db.select().from(users).$dynamic();
- * query = withAdults(query);
- * query = withActiveUsers(query);
- * query = withNameSort(query);
- * const result = await query;
- * ```
- */
 export const buildMongoQuery = <TTable extends Table>(
 	table: TTable,
 	request: QueryRequest,
