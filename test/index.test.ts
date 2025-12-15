@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { Decimal } from 'decimal.js'
-import { mongoQueryBuilder } from '#/query'
+import { mongoQueryBuilder } from '#/index'
 import { db, schema } from './db'
 
 describe('mongoQueryBuilder', () => {
