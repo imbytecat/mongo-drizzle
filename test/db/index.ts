@@ -4,6 +4,6 @@ import { env } from '#test/env'
 import * as schema from './schema'
 
 const client = new SQL(env.DATABASE_URL)
-const db = drizzle({ client, schema })
+const db = drizzle({ client, schema, logger: env.NODE_ENV !== 'production' })
 
 export { schema, db }

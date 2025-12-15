@@ -1,6 +1,11 @@
 import { z } from 'zod'
 
 const envSchema = z.object({
+  TZ: z.string().optional().default('Asia/Shanghai'),
+  NODE_ENV: z
+    .enum(['development', 'test', 'production'])
+    .optional()
+    .default('development'),
   DATABASE_URL: z.url(),
 })
 

@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'bun:test'
 import { mongoQueryBuilder } from '#/query'
-import { schema } from './db'
+import { db, schema } from './db'
 
 describe('applyMongoQuery', () => {
   it('should return the correct result', async () => {
-    const query = mongoQueryBuilder(schema.tests, {
+    const qb = mongoQueryBuilder(schema.tests, {
       find: {
         numeric: {
-          $gte: 18,
+          $lte: 18,
         },
       },
       sort: {
         numeric: 1,
       },
     })
-    await query
-    expect(1).toBe(1)
+    const result = await db.execute(qb)
+    console.log(result)
+    expect(result).toBeArray()
   })
 })
