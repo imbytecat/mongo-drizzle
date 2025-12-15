@@ -104,14 +104,39 @@ const parseValidDateString = (value: string): Date | null => {
 }
 
 /**
+ * 类型守卫:检查对象是否有 _zod 属性(是 Zod schema)
+ */
+const hasZodProperty = (
+  value: unknown,
+): value is { _zod: { def: unknown } } => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    '_zod' in value &&
+    typeof (value as { _zod?: unknown })._zod === 'object' &&
+    (value as { _zod?: unknown })._zod !== null
+  )
+}
+
+/**
  * 类型守卫:检查对象是否是 Zod schema
  */
-const isZodSchema = (value: unknown): value is z.ZodTypeAny =>
-  typeof value === 'object' &&
-  value !== null &&
-  '_zod' in value &&
-  typeof value._zod === 'object' &&
-  value._zod !== null
+const isZodSchema = (value: unknown): value is z.ZodTypeAny => {
+  return hasZodProperty(value)
+}
+
+/**
+ * 获取包装类型的内部 schema
+ */
+const getInnerSchema = (def: {
+  type: string
+  schema?: unknown
+  innerType?: unknown
+}): unknown => {
+  if (def.type === 'transform') return def.schema
+  if (def.type === 'optional' || def.type === 'nullable') return def.innerType
+  return null
+}
 
 /**
  * 检查 Zod schema 是否是日期类型
@@ -125,14 +150,7 @@ const isDateSchema = (schema: z.ZodTypeAny): boolean => {
   if (def.type === 'date') return true
 
   // 递归检查包装类型
-  const innerSchema =
-    def.type === 'transform' && 'schema' in def
-      ? def.schema
-      : (def.type === 'optional' || def.type === 'nullable') &&
-          'innerType' in def
-        ? def.innerType
-        : null
-
+  const innerSchema = getInnerSchema(def)
   return Boolean(
     innerSchema && isZodSchema(innerSchema) && isDateSchema(innerSchema),
   )
