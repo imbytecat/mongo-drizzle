@@ -297,7 +297,7 @@ const buildOrderByClause = (
  * const result = await query;
  * ```
  */
-export const withMongoQuery = <TTable extends Table>(
+export const buildMongoQuery = <TTable extends Table>(
 	table: TTable,
 	request: QueryRequest,
 ) => {

@@ -6,8 +6,8 @@ export const queryRequestSchema = z
 		sort: z
 			.record(z.string(), z.union([z.literal(1), z.literal(-1)]))
 			.optional(),
-		skip: z.number().int().nonnegative().default(0),
-		limit: z.number().int().positive().default(50),
+		skip: z.number().int().nonnegative().default(0).optional(),
+		limit: z.number().int().positive().default(50).optional(),
 	})
 	.strict();
 
