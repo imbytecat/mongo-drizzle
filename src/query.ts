@@ -1,6 +1,8 @@
 import type { Condition } from '@ucast/core'
 import { CompoundCondition, FieldCondition } from '@ucast/core'
 import { allParsingInstructions, MongoQueryParser } from '@ucast/mongo'
+import dayjs from 'dayjs'
+import customParseFormat from 'dayjs/plugin/customParseFormat'
 import type { Column, SQL, Table } from 'drizzle-orm'
 import {
   and,
@@ -22,6 +24,9 @@ import { type PgSelectQueryBuilder, QueryBuilder } from 'drizzle-orm/pg-core'
 import { createSelectSchema } from 'drizzle-zod'
 import type { z } from 'zod'
 import type { QueryRequest } from './schema'
+
+// 启用 dayjs 的严格解析插件
+dayjs.extend(customParseFormat)
 
 // --- 常量定义 ---
 
@@ -91,11 +96,12 @@ const filterDefinedSQL = (sqlArray: readonly (SQL | undefined)[]): SQL[] =>
   sqlArray.filter((x): x is SQL => x !== undefined)
 
 /**
- * ISO8601 日期字符串的正则表达式
- * 匹配格式: YYYY-MM-DDTHH:mm:ss.sssZ 或 YYYY-MM-DDTHH:mm:ss±HH:mm
+ * 检查字符串是否是有效的日期格式并转换为 Date 对象
  */
-const ISO8601_REGEX =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})?$/
+const parseValidDateString = (value: string): Date | null => {
+  const parsed = dayjs(value)
+  return parsed.isValid() ? parsed.toDate() : null
+}
 
 /**
  * 类型守卫:检查对象是否是 Zod schema
@@ -120,28 +126,28 @@ const isDateSchema = (schema: z.ZodTypeAny): boolean => {
 
   // 递归检查包装类型
   const innerSchema =
-    def.type === 'transform' && 'schema' in def ? def.schema
-    : (def.type === 'optional' || def.type === 'nullable') && 'innerType' in def ? def.innerType
-    : null
+    def.type === 'transform' && 'schema' in def
+      ? def.schema
+      : (def.type === 'optional' || def.type === 'nullable') &&
+          'innerType' in def
+        ? def.innerType
+        : null
 
-  return Boolean(innerSchema && isZodSchema(innerSchema) && isDateSchema(innerSchema))
+  return Boolean(
+    innerSchema && isZodSchema(innerSchema) && isDateSchema(innerSchema),
+  )
 }
 
 /**
- * 预处理值：将 ISO8601 格式的字符串转换为 Date 对象
+ * 预处理值：将日期字符串转换为 Date 对象
  * 这是为了解决 JSON 传输时无法直接传递 Date 对象的问题
  * 只有当目标 schema 是日期类型时才会进行转换
  */
 const preprocessValue = (value: unknown, schema: z.ZodTypeAny): unknown => {
-  // 只有当 schema 是日期类型且值是符合 ISO8601 格式的字符串时才转换
-  if (
-    isDateSchema(schema) &&
-    typeof value === 'string' &&
-    ISO8601_REGEX.test(value)
-  ) {
-    const date = new Date(value)
-    // 验证日期是否有效
-    return Number.isNaN(date.getTime()) ? value : date
+  // 只有当 schema 是日期类型且值是字符串时才尝试转换
+  if (isDateSchema(schema) && typeof value === 'string') {
+    const date = parseValidDateString(value)
+    return date ?? value
   }
   return value
 }
