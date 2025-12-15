@@ -1,9 +1,18 @@
-import { describe, expect, it } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { Decimal } from 'decimal.js'
 import { mongoQueryBuilder } from '#/index'
 import { db, schema } from './db'
+import { fixtures } from './fixtures'
 
 describe('mongoQueryBuilder', () => {
+  beforeAll(async () => {
+    const testData = fixtures.tests.basic()
+    await db.insert(schema.tests).values(testData)
+  })
+
+  afterAll(async () => {
+    await db.delete(schema.tests)
+  })
   describe('过滤查询', () => {
     it('应该正确过滤 numeric 字段的 $lte 操作符', async () => {
       const qb = mongoQueryBuilder(schema.tests, {
