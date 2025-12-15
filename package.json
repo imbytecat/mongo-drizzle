@@ -2,8 +2,7 @@
   "name": "mongo-drizzle",
   "scripts": {
     "fix": "biome check --write",
-    "db:push": "drizzle-kit push",
-    "db:generate": "drizzle-kit generate"
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@ucast/core": "^1.10.2",
