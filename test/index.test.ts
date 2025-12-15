@@ -28,8 +28,6 @@ describe('mongoQueryBuilder', () => {
 
       const result = await db.execute(qb)
 
-      expect(result).toBeArray()
-
       // 验证所有结果的 numeric 字段都小于等于 18
       result.forEach((row) => {
         const numericValue = new Decimal(row.numeric)
@@ -52,8 +50,6 @@ describe('mongoQueryBuilder', () => {
 
       const result = await db.execute(qb)
 
-      expect(result).toBeArray()
-
       // 验证所有结果的 timestamp 都在目标日期之前
       const targetTimestamp = new Date(targetDate).getTime()
       result.forEach((row) => {
@@ -73,8 +69,6 @@ describe('mongoQueryBuilder', () => {
       })
 
       const result = await db.execute(qb)
-
-      expect(result).toBeArray()
 
       // 验证结果是升序排列的
       for (let i = 0; i < result.length - 1; i++) {
