@@ -16,12 +16,6 @@ const isZodSchema = (value: unknown): value is z.ZodTypeAny => {
 
 /**
  * 获取 schema 的内部类型
- *
- * 使用 Zod v4 的官方 API:
- * - `.unwrap()` 方法用于 ZodOptional 和 ZodNullable
- * - `._zod.def.schema` 用于 ZodTransform (内部 API,但文档有记录)
- *
- * @see https://zod.dev - Zod v4 官方文档
  */
 const unwrapSchema = (schema: z.ZodTypeAny): z.ZodTypeAny => {
   // 使用 Zod v4 的 .unwrap() 方法 (ZodOptional, ZodNullable, ZodArray 等)
