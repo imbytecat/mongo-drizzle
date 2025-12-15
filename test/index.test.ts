@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildMongoQuery } from "../src";
+import { buildMongoQuery } from "@/query";
 import { db, schema } from "./db";
 
 describe("applyMongoQuery", () => {
