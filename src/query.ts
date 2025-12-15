@@ -91,7 +91,80 @@ const filterDefinedSQL = (sqlArray: readonly (SQL | undefined)[]): SQL[] =>
   sqlArray.filter((x): x is SQL => x !== undefined)
 
 /**
+ * ISO8601 日期字符串的正则表达式
+ * 匹配格式: YYYY-MM-DDTHH:mm:ss.sssZ 或 YYYY-MM-DDTHH:mm:ss±HH:mm
+ */
+const ISO8601_REGEX =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})?$/
+
+/**
+ * 类型守卫:检查对象是否是 Zod schema
+ */
+const isZodSchema = (value: unknown): value is z.ZodTypeAny => {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    '_zod' in value &&
+    typeof value._zod === 'object' &&
+    value._zod !== null
+  )
+}
+
+/**
+ * 检查 Zod schema 是否是日期类型
+ * 支持 ZodDate 和包装类型(optional, nullable, transform)
+ */
+const isDateSchema = (schema: z.ZodTypeAny): boolean => {
+  const def = schema._zod?.def
+
+  if (!def) {
+    return false
+  }
+
+  // 直接检查是否是 date 类型
+  if (def.type === 'date') {
+    return true
+  }
+
+  // ZodTransform 包装的情况(例如 .transform())
+  if (def.type === 'transform' && 'schema' in def && isZodSchema(def.schema)) {
+    return isDateSchema(def.schema)
+  }
+
+  // ZodOptional 或 ZodNullable 包装的情况
+  if (
+    (def.type === 'optional' || def.type === 'nullable') &&
+    'innerType' in def &&
+    isZodSchema(def.innerType)
+  ) {
+    return isDateSchema(def.innerType)
+  }
+
+  return false
+}
+
+/**
+ * 预处理值：将 ISO8601 格式的字符串转换为 Date 对象
+ * 这是为了解决 JSON 传输时无法直接传递 Date 对象的问题
+ * 只有当目标 schema 是日期类型时才会进行转换
+ */
+const preprocessValue = (value: unknown, schema: z.ZodTypeAny): unknown => {
+  // 只有当 schema 是日期类型且值是符合 ISO8601 格式的字符串时才转换
+  if (
+    isDateSchema(schema) &&
+    typeof value === 'string' &&
+    ISO8601_REGEX.test(value)
+  ) {
+    const date = new Date(value)
+    // 验证日期是否有效
+    return Number.isNaN(date.getTime()) ? value : date
+  }
+  return value
+}
+
+/**
  * 使用 Zod schema 解析和验证值
+ * 在验证前会自动将 ISO8601 字符串转换为 Date 对象
  *
  * @returns 验证成功返回转换后的值，失败返回 undefined
  */
@@ -99,7 +172,8 @@ const parseAndValidateValue = (
   value: unknown,
   schema: z.ZodTypeAny,
 ): unknown => {
-  const result = schema.safeParse(value)
+  const processedValue = preprocessValue(value, schema)
+  const result = schema.safeParse(processedValue)
   return result.success ? result.data : undefined
 }
 
