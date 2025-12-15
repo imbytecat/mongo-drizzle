@@ -13,6 +13,7 @@ describe('mongoQueryBuilder', () => {
   afterAll(async () => {
     await db.delete(schema.tests)
   })
+
   describe('过滤查询', () => {
     it('应该正确过滤 numeric 字段的 $lte 操作符', async () => {
       const qb = mongoQueryBuilder(schema.tests, {
