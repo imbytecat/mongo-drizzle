@@ -1,8 +1,7 @@
 {
 	"name": "mongo-drizzle",
 	"scripts": {
-		"dev": "bun run --hot src/index.ts",
-		"lint:fix": "biome lint --write ./src"
+		"fix": "biome check --write"
 	},
 	"dependencies": {
 		"@ucast/core": "^1.10.2",
